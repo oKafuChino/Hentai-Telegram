@@ -112,6 +112,40 @@ class TelegraphPublisher:
         }
         self._call_api_sync("editPage", payload)
 
+    def delete_page(self, path_or_url: str) -> bool:
+        """Overwrite a Telegraph page to clear all comic images and mark as deleted."""
+        clean_path = str(path_or_url).strip()
+        if "telegra.ph/" in clean_path:
+            clean_path = clean_path.split("telegra.ph/", 1)[1]
+        clean_path = clean_path.split("?")[0].split("#")[0].strip("/")
+        if not clean_path:
+            return False
+        empty_content = [{"tag": "p", "children": ["该内容已被删除或下架。"]}]
+        try:
+            token = self.ensure_account()
+            payload = {
+                "access_token": token,
+                "path": clean_path,
+                "title": "已删除",
+                "author_name": "",
+                "content": empty_content,
+                "return_content": False,
+            }
+            self._call_api_sync("editPage", payload)
+            logger.info(f"✅ Telegraph 页面已清空删除: {clean_path}")
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"删除 Telegraph 页面失败 path={clean_path}: {exc}")
+            return False
+
+    def delete_pages(self, paths_or_urls: Sequence[str]) -> int:
+        """Delete multiple Telegraph pages sequentially."""
+        deleted_count = 0
+        for item in paths_or_urls:
+            if self.delete_page(item):
+                deleted_count += 1
+        return deleted_count
+
     def publish_chapter(self, title: str, image_urls: Sequence[str]) -> list[str]:
         """Publish image URLs to Telegraph, splitting into multiple chapters if exceeding limit.
 

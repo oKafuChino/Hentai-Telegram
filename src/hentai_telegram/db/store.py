@@ -330,6 +330,25 @@ class Store:
         ).fetchone()
         return dict(row) if row else None
 
+    def get_manga_with_details(self, source: str, source_id: str) -> dict | None:
+        """Fetch a manga with its chapters and tasks from the database without deleting."""
+        row = self.connection.execute(
+            "SELECT * FROM manga WHERE source=? AND source_id=?",
+            (source, source_id),
+        ).fetchone()
+        if not row:
+            return None
+        manga_data = dict(row)
+        manga_id = manga_data["id"]
+
+        tasks_rows = self.connection.execute("SELECT * FROM tasks WHERE manga_id=?", (manga_id,)).fetchall()
+        manga_data["tasks"] = [dict(r) for r in tasks_rows]
+
+        chapters_rows = self.connection.execute("SELECT * FROM chapters WHERE manga_id=?", (manga_id,)).fetchall()
+        manga_data["chapters"] = [dict(r) for r in chapters_rows]
+
+        return manga_data
+
     def delete_manga(self, source: str, source_id: str) -> dict | None:
         """Delete a manga and its chapters and tasks from the database."""
         with self.transaction() as db:

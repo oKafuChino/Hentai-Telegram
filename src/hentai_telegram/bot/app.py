@@ -60,6 +60,7 @@ def create_dispatcher(
     channel_id: str = "",
     s3_client=None,
     storage_root=None,
+    telegraph=None,
 ) -> Dispatcher:
     router = Router()
     router.message.outer_middleware(AdminAuthorization(allowed_user_ids))
@@ -72,7 +73,7 @@ def create_dispatcher(
             "本机器人负责将禁漫漫画抓取并转存至 <b>Telegraph (Instant View)</b>，最后自动发布到指定的 Telegram 频道。\n\n"
             "📌 <b>常用指令</b>：\n"
             "• <code>/jm &lt;ID或链接&gt;</code>：抓取漫画并发布到频道\n"
-            "• <code>/del &lt;ID或链接&gt;</code>：删除漫画（清理缓存、R2存储与频道消息）\n"
+            "• <code>/del &lt;ID或链接&gt;</code>：删除漫画（清理缓存、R2存储、Telegraph页面与频道消息）\n"
             "• <code>/tasks</code>：查看正在处理和排队的任务\n"
             "• <code>/cancel &lt;任务ID&gt;</code>：取消指定任务\n"
             "• <code>/retry &lt;任务ID&gt;</code>：重试失败的任务\n"
@@ -160,13 +161,13 @@ def create_dispatcher(
         _, _, arg = parse_command(message.text or "")
         if not arg.strip():
             await message.answer(
-                "请输入要删除的漫画 ID 或链接，例如：\n<code>/del 123456</code> 或 <code>/del JM123456</code>",
+                "请输入要删除的漫画 ID 或链接，例如：\n<code>/del 123456</code> 或 <code>/del JM123456</code> 或 <code>/del https://telegra.ph/...</code>",
                 parse_mode="HTML",
             )
             return
 
         ref = arg.strip()
-        status_msg = await message.answer(f"⏳ 正在移除漫画 <code>{escape(ref)}</code> 及其缓存、R2 存储与频道消息...", parse_mode="HTML")
+        status_msg = await message.answer(f"⏳ 正在移除 <code>{escape(ref)}</code> 及其缓存、R2 存储、Telegraph 页面与频道消息...", parse_mode="HTML")
         try:
             bot = message.bot
             res = await service.delete(
@@ -176,17 +177,20 @@ def create_dispatcher(
                 channel_id=channel_id,
                 s3_client=s3_client,
                 storage_root=storage_root,
+                telegraph_client=telegraph,
             )
 
+            id_line = f"• <b>漫画 ID</b>：<code>JM{res['source_id']}</code>" if res["source_id"] != "Telegraph" else "• <b>类型</b>：Telegraph 独立页面"
             lines = [
-                "🗑 <b>漫画删除成功</b>\n",
-                f"• <b>漫画标题</b>：{escape(res['title'])}",
-                f"• <b>漫画 ID</b>：<code>JM{res['source_id']}</code>",
+                "🗑 <b>删除成功</b>\n",
+                f"• <b>目标名称</b>：{escape(res['title'])}",
+                id_line,
+                f"• <b>Telegraph 页面</b>：已清空删除 {res['deleted_telegraph_count']} 篇",
                 f"• <b>频道消息</b>：已删除 {res['deleted_channel_msgs']} 条",
                 f"• <b>R2 对象存储</b>：已清理 {res['deleted_r2_count']} 个文件",
                 f"• <b>数据库记录</b>：已清理 {res['deleted_chapters']} 个章节 / {res['deleted_tasks']} 个任务",
             ]
-            if not res["found_in_db"]:
+            if not res["found_in_db"] and res["source_id"] != "Telegraph":
                 lines.append("\n<i>（提示：该漫画此前未在数据库中登记或已被清理）</i>")
 
             await status_msg.edit_text("\n".join(lines), parse_mode="HTML")

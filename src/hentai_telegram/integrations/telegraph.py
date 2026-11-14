@@ -260,6 +260,129 @@ class TelegraphClient:
 
         raise TelegraphError("发布页面重试耗尽")
 
+    async def edit_page(
+        self,
+        session: aiohttp.ClientSession,
+        path: str,
+        title: str,
+        content: list[dict[str, Any]],
+        author_name: str = "",
+        author_url: str = "",
+    ) -> bool:
+        """Edit an existing Telegraph page."""
+        token = await self.ensure_token(session)
+        clean_path = path.strip()
+        if "telegra.ph/" in clean_path:
+            clean_path = clean_path.split("telegra.ph/", 1)[1]
+        clean_path = clean_path.split("?")[0].split("#")[0].strip("/")
+
+        payload = {
+            "access_token": token,
+            "path": clean_path,
+            "title": (title[:250] or "已删除"),
+            "author_name": (author_name or "")[:128],
+            "author_url": (author_url or "")[:512],
+            "content": json.dumps(content, ensure_ascii=False),
+            "return_content": False,
+        }
+
+        for attempt in range(3):
+            try:
+                async with session.post(
+                    f"{self.api_url}/editPage",
+                    data=payload,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                ) as resp:
+                    if resp.status != 200:
+                        text = await resp.text()
+                        raise TelegraphError(f"HTTP {resp.status}: {text[:200]}")
+                    data = await resp.json()
+                    if not data.get("ok"):
+                        error_msg = str(data.get("error", "未知错误"))
+                        if any(err in error_msg for err in ("PAGE_NOT_FOUND", "ACCESS_DENIED", "PAGE_SAVE_FAILED")):
+                            logger.warning("edit_telegraph_page_skipped path=%s error=%s", clean_path, error_msg)
+                            return False
+                        if "FLOOD_WAIT" in error_msg.upper():
+                            import re
+
+                            match = re.search(r"FLOOD_WAIT_?(\d+)?", error_msg, re.IGNORECASE)
+                            wait_sec = int(match.group(1)) if match and match.group(1) else (attempt + 1) * 2
+                            logger.info("telegraph_flood_wait path=%s wait=%s", clean_path, wait_sec)
+                            await asyncio.sleep(wait_sec)
+                            continue
+                        raise TelegraphError(f"编辑页面失败: {error_msg}")
+                    return True
+            except (TimeoutError, aiohttp.ClientError) as exc:
+                if attempt == 2:
+                    raise TelegraphError(f"编辑页面网络失败: {exc}") from exc
+                await asyncio.sleep(1 + attempt)
+
+        raise TelegraphError("编辑页面重试耗尽")
+
+    async def delete_page(
+        self,
+        path_or_url: str,
+        session: aiohttp.ClientSession | None = None,
+    ) -> bool:
+        """Overwrite a Telegraph page to clear all comic images and mark as deleted."""
+        clean_path = str(path_or_url).strip()
+        if "telegra.ph/" in clean_path:
+            clean_path = clean_path.split("telegra.ph/", 1)[1]
+        clean_path = clean_path.split("?")[0].split("#")[0].strip("/")
+        if not clean_path:
+            return False
+
+        empty_nodes: list[dict[str, Any]] = [
+            {"tag": "p", "children": ["该内容已被删除或下架。"]},
+        ]
+
+        if session is not None:
+            return await self.edit_page(
+                session=session,
+                path=clean_path,
+                title="已删除",
+                content=empty_nodes,
+                author_name="",
+                author_url="",
+            )
+
+        async with aiohttp.ClientSession() as new_session:
+            return await self.edit_page(
+                session=new_session,
+                path=clean_path,
+                title="已删除",
+                content=empty_nodes,
+                author_name="",
+                author_url="",
+            )
+
+    async def delete_pages(
+        self,
+        urls_or_paths: list[str],
+        session: aiohttp.ClientSession | None = None,
+    ) -> int:
+        """Overwrite multiple Telegraph pages, returning count of successfully cleared pages."""
+        if not urls_or_paths:
+            return 0
+        deleted_count = 0
+        if session is not None:
+            for item in urls_or_paths:
+                try:
+                    if await self.delete_page(item, session=session):
+                        deleted_count += 1
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("delete_telegraph_page_failed item=%s error=%s", item, exc)
+            return deleted_count
+
+        async with aiohttp.ClientSession() as new_session:
+            for item in urls_or_paths:
+                try:
+                    if await self.delete_page(item, session=new_session):
+                        deleted_count += 1
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("delete_telegraph_page_failed item=%s error=%s", item, exc)
+            return deleted_count
+
     async def create_chapter_page(
         self,
         session: aiohttp.ClientSession,

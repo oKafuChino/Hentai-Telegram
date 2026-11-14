@@ -277,17 +277,26 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         # Set task channel_message_id in db
         self.store.update(task["id"], channel_message_id=666)
 
+        # Update chapter telegraph_url and manga index_url
+        manga_row = self.store.get_manga("jmcomic", "12345")
+        self.store.update_manga(manga_row["id"], index_url="https://telegra.ph/index-12345")
+        chapters = self.store.chapters(manga_row["id"])
+        self.store.update_chapter(chapters[0]["id"], telegraph_url="https://telegra.ph/ch-1")
+        self.store.update_chapter(chapters[1]["id"], telegraph_url="https://telegra.ph/ch-2")
+
         # Create dummy staging folder
         storage_root = self.root / "storage"
         task_staging = storage_root / "staging" / f"task_{task['id']}"
         task_staging.mkdir(parents=True, exist_ok=True)
         (task_staging / "dummy.png").write_bytes(b"data")
 
-        # Mock bot and s3_client
+        # Mock bot, s3_client, telegraph
         mock_bot = AsyncMock()
         mock_s3 = MagicMock()
         mock_s3.is_configured.return_value = True
         mock_s3.delete_manga_objects = AsyncMock(return_value=12)
+        mock_telegraph = AsyncMock()
+        mock_telegraph.delete_pages = AsyncMock(return_value=3)
 
         res = await svc.delete(
             reference="12345",
@@ -296,12 +305,14 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
             channel_id="-1009999999",
             s3_client=mock_s3,
             storage_root=storage_root,
+            telegraph_client=mock_telegraph,
         )
 
         self.assertEqual(res["source_id"], "12345")
         self.assertEqual(res["title"], "测试漫画标题")
         self.assertTrue(res["found_in_db"])
         self.assertEqual(res["deleted_channel_msgs"], 1)
+        self.assertEqual(res["deleted_telegraph_count"], 3)
         self.assertEqual(res["deleted_r2_count"], 12)
         self.assertEqual(res["deleted_tasks"], 1)
         self.assertEqual(res["deleted_chapters"], 2)
@@ -309,6 +320,7 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
 
         mock_bot.delete_message.assert_called_once_with(chat_id=-1009999999, message_id=666)
         mock_s3.delete_manga_objects.assert_called_once_with("12345")
+        mock_telegraph.delete_pages.assert_called_once()
         self.assertFalse(task_staging.exists())
         self.assertIsNone(self.store.get_manga("jmcomic", "12345"))
 
@@ -329,6 +341,39 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(res["deleted_channel_msgs"], 0)
         self.assertEqual(res["deleted_tasks"], 1)
         self.assertIsNone(self.store.get_manga("jmcomic", "77777"))
+
+    async def test_task_service_delete_direct_telegraph_url(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        mock_telegraph = AsyncMock()
+        mock_telegraph.delete_page = AsyncMock(return_value=True)
+
+        res = await svc.delete(
+            reference="https://telegra.ph/my-manga-page",
+            user_id=1001,
+            telegraph_client=mock_telegraph,
+        )
+        self.assertEqual(res["source_id"], "Telegraph")
+        self.assertEqual(res["deleted_telegraph_count"], 1)
+        mock_telegraph.delete_page.assert_called_once_with("https://telegra.ph/my-manga-page")
+
+    async def test_telegraph_client_delete_page(self):
+        client = TelegraphClient(access_token="test_token")
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json.return_value = {"ok": True, "result": {"path": "test-page"}}
+
+        mock_session = MagicMock()
+        mock_session.post.return_value.__aenter__.return_value = mock_resp
+
+        success = await client.delete_page("https://telegra.ph/test-page", session=mock_session)
+        self.assertTrue(success)
+
+        # Ensure post called editPage
+        call_args = mock_session.post.call_args
+        self.assertIn("/editPage", call_args[0][0])
+        payload = call_args[1]["data"]
+        self.assertEqual(payload["path"], "test-page")
+        self.assertEqual(payload["title"], "已删除")
 
 
 if __name__ == "__main__":

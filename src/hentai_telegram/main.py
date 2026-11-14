@@ -59,7 +59,13 @@ async def run(settings: Settings, db_path, recent_logs):
     publisher = ChannelPublisher(bot, settings.telegram_channel_id)
     worker = Worker(store, provider, telegraph, publisher, settings)
     users = UserService(settings.allowed_user_ids)
-    task_service = TaskService(store, provider, settings.provider_domains, settings.allowed_user_ids)
+    task_service = TaskService(
+        store,
+        provider,
+        settings.provider_domains,
+        settings.allowed_user_ids,
+        telegraph=telegraph,
+    )
     diagnostics = Diagnostics(users, worker, recent_logs, publisher)
 
     dispatcher = create_dispatcher(
@@ -70,6 +76,7 @@ async def run(settings: Settings, db_path, recent_logs):
         channel_id=settings.telegram_channel_id,
         s3_client=s3_client,
         storage_root=Path(settings.storage_root),
+        telegraph=telegraph,
     )
 
     heartbeat = db_path.parent / "heartbeat"

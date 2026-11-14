@@ -99,6 +99,17 @@ class TestPipelineModules(unittest.TestCase):
         self.assertTrue(kwargs["link_preview_options"].show_above_text)
         self.assertTrue(kwargs["link_preview_options"].prefer_large_media)
 
+    def test_telegraph_publisher_delete_pages(self):
+        pub = TelegraphPublisher(self.settings)
+        with patch.object(pub, "_call_api_sync", return_value={"ok": True}) as mock_call:
+            count = pub.delete_pages(["https://telegra.ph/page-1", "https://telegra.ph/page-2"])
+            self.assertEqual(count, 2)
+            self.assertEqual(mock_call.call_count, 2)
+            first_call_args = mock_call.call_args_list[0]
+            self.assertEqual(first_call_args[0][0], "editPage")
+            self.assertEqual(first_call_args[0][1]["path"], "page-1")
+            self.assertEqual(first_call_args[0][1]["title"], "已删除")
+
 
 if __name__ == "__main__":
     unittest.main()
