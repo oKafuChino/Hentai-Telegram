@@ -75,11 +75,13 @@ class Settings:
         else:
             upload_url = raw_upload
 
+        r2_acc = os.getenv("R2_ACCOUNT_ID", "").strip()
+        r2_default_ep = f"https://{r2_acc}.r2.cloudflarestorage.com" if r2_acc else ""
         s3_endpoint = (
             os.getenv("S3_ENDPOINT_URL")
             or os.getenv("R2_ENDPOINT_URL")
             or os.getenv("B2_ENDPOINT_URL")
-            or ""
+            or r2_default_ep
         ).strip()
         s3_bucket = (
             os.getenv("S3_BUCKET_NAME")
@@ -102,6 +104,7 @@ class Settings:
         s3_public = (
             os.getenv("S3_PUBLIC_URL")
             or os.getenv("R2_PUBLIC_URL")
+            or os.getenv("R2_CUSTOM_DOMAIN")
             or os.getenv("B2_PUBLIC_URL")
             or ""
         ).strip()
