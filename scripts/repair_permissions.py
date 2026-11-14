@@ -1,7 +1,7 @@
 """Repair only managed service directories, without following symlinks."""
 import os
-from pathlib import Path
 import stat
+from pathlib import Path
 
 from configure import ENV, ROOT, parse
 

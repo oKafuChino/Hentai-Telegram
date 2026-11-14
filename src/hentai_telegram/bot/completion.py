@@ -1,10 +1,11 @@
 """Completion cards use downloaded artwork, without another source request."""
 import io
 import json
-from pathlib import Path
 import zipfile
+from pathlib import Path
 
 from PIL import Image
+
 from hentai_telegram.domain.errors import JobError
 from hentai_telegram.storage.cbz import contained
 

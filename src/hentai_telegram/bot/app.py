@@ -171,14 +171,16 @@ def create_dispatcher(
         except Exception as exc:
             await query.answer(f"重试失败: {exc}", show_alert=True)
 
-    async def handle_submission(message: Message, reference: str):
-        reply = await message.answer(f"⏳ 正在查询漫画 <code>{escape(reference)}</code> 元数据...", parse_mode="HTML")
+    async def handle_submission(message: Message, reference: str, force: bool = False):
+        ref_clean = reference.strip()
+        reply = await message.answer(f"⏳ 正在查询漫画 <code>{escape(ref_clean)}</code> 元数据...", parse_mode="HTML")
         try:
             task = await service.download(
-                reference=reference,
+                reference=ref_clean,
                 user_id=message.from_user.id,
                 chat_id=message.chat.id,
                 message_id=reply.message_id,
+                force=force,
             )
             cancel_btn = [[InlineKeyboardButton(text="⏹ 取消下载", callback_data=f"cancel:{task['id']}")]]
             await reply.edit_text(
@@ -189,16 +191,28 @@ def create_dispatcher(
         except (ValueError, JobError) as exc:
             await reply.edit_text(f"❌ <b>提交失败</b>\n{escape(str(exc))}", parse_mode="HTML")
         except Exception as exc:
-            logger.error("submit_error reference=%s exc=%s", reference, exc, exc_info=True)
+            logger.exception("submit_error reference=%s exc=%s", reference, exc)
             await reply.edit_text(f"❌ <b>提交失败</b>\n系统错误: {escape(str(exc))}", parse_mode="HTML")
 
     @router.message(Command("jm", "download"))
     async def jm_command_handler(message: Message):
         _, _, arg = parse_command(message.text or "")
         if not arg.strip():
-            await message.answer("请输入漫画 ID 或链接，例如：\n<code>/jm 123456</code>", parse_mode="HTML")
+            await message.answer(
+                "请输入漫画 ID 或链接，例如：\n<code>/jm 123456</code>\n如需强制重新抓取已完成的漫画：\n<code>/jm 123456 force</code>",
+                parse_mode="HTML",
+            )
             return
-        await handle_submission(message, arg.strip())
+        parts = arg.strip().split()
+        force = False
+        ref_tokens = []
+        for p in parts:
+            if p.lower() in ("force", "-f", "--force", "强制"):
+                force = True
+            else:
+                ref_tokens.append(p)
+        ref = " ".join(ref_tokens) if ref_tokens else parts[0]
+        await handle_submission(message, ref, force=force)
 
     @router.message(F.text)
     async def text_handler(message: Message):
@@ -206,8 +220,18 @@ def create_dispatcher(
         if text.startswith("/"):
             return
         # If admin pastes a number or supported url in private chat
-        if text.isdigit() or "jm" in text.lower():
-            await handle_submission(message, text)
+        parts = text.split()
+        force = False
+        ref_tokens = []
+        for p in parts:
+            if p.lower() in ("force", "-f", "--force", "强制"):
+                force = True
+            else:
+                ref_tokens.append(p)
+        ref = " ".join(ref_tokens) if ref_tokens else text
+        lower = ref.lower()
+        if ref.isdigit() or lower.startswith("jm") or "comic" in lower or "album" in lower or "photo" in lower or "http" in lower:
+            await handle_submission(message, ref, force=force)
 
     dispatcher = Dispatcher()
     dispatcher.include_router(router)

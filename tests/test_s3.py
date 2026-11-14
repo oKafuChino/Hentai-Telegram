@@ -1,7 +1,6 @@
-import asyncio
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from hentai_telegram.integrations.telegraph import TelegraphClient
@@ -20,6 +19,8 @@ class TestS3Storage(unittest.IsolatedAsyncioTestCase):
     def test_s3_configured_check(self):
         unconfigured = S3StorageClient()
         self.assertFalse(unconfigured.is_configured())
+        with self.assertRaises(S3StorageError):
+            _ = unconfigured.client
 
         configured = S3StorageClient(
             endpoint_url="https://acc.r2.cloudflarestorage.com",

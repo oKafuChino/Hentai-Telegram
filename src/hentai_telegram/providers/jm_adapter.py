@@ -1,18 +1,19 @@
 """JMComic adapter, executed in an isolated process by CommandProvider."""
-from contextlib import contextmanager, redirect_stdout
+import errno
 import json
 import os
-from pathlib import Path
 import re
 import sys
-from importlib.metadata import PackageNotFoundError, version
-import traceback
-import time
-import errno
 import tempfile
+import time
+import traceback
 import warnings
-from hentai_telegram.domain.models import normalize_tags
+from contextlib import contextmanager, redirect_stdout
+from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
+
 from hentai_telegram.domain.errors import JobError
+from hentai_telegram.domain.models import normalize_tags
 
 
 class StageError(Exception):
@@ -133,8 +134,9 @@ def image_pixel_limit(max_pixels):
 
 def download_raw(client, image, destination, limit):
     """Stream encoded bytes; do not use SDK wrappers which access resp.content."""
-    from jmcomic import JmImageTool, JmModuleConfig
     from urllib.parse import urljoin, urlsplit
+
+    from jmcomic import JmImageTool, JmModuleConfig
 
     if type(limit) is not int or limit <= 0:
         raise ValueError('Invalid size limit')

@@ -1,12 +1,13 @@
 import asyncio
-from dataclasses import asdict, replace
 import errno
 import json
 import logging
-from pathlib import Path
 import random
 import shutil
 import time
+from dataclasses import asdict, replace
+from pathlib import Path
+
 import aiohttp
 
 from hentai_telegram.db.store import Store, decode_manga
@@ -102,7 +103,7 @@ class Worker:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.error("task_failure task=%s exception=%s", task_id, exc, exc_info=True)
+            logger.exception("task_failure task=%s exception=%s", task_id, exc)
             self.store.finish(task_id, "FAILED", "INTERNAL", f"内部错误: {exc}")
         finally:
             self.current_task = None
@@ -186,24 +187,24 @@ class Worker:
                 else:
                     semaphore = asyncio.Semaphore(self.settings.download_concurrency)
 
-                    async def download_one(p: Page):
-                        async with semaphore:
+                    async def download_one(p: Page, stage: Path = chapter_stage, sem: asyncio.Semaphore = semaphore):
+                        async with sem:
                             self.check(task_id)
-                            candidates = staged_pages(chapter_stage, p.number)
+                            candidates = staged_pages(stage, p.number)
                             if candidates:
                                 return
-                            partial = chapter_stage / f"{p.number:06d}.part"
+                            partial = stage / f"{p.number:06d}.part"
                             await self.guarded(
                                 task_id,
                                 self.provider.download(p, partial, self.settings.max_page_bytes),
                             )
                             ext = validate_image(partial, self.settings.max_page_bytes, self.settings.max_pixels)
-                            partial.replace(chapter_stage / f"{p.number:06d}{ext}")
+                            partial.replace(stage / f"{p.number:06d}{ext}")
 
                     await asyncio.gather(*(download_one(p) for p in pages))
 
-                # Save cover from chapter 1 page 1
-                if idx == 1 and not cover_path.exists():
+                # Save cover from the first available page 1
+                if not cover_path.exists():
                     p1_candidates = staged_pages(chapter_stage, 1)
                     if p1_candidates:
                         shutil.copy2(p1_candidates[0], cover_path)

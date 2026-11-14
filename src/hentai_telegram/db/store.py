@@ -1,10 +1,10 @@
-from contextlib import contextmanager
-from dataclasses import asdict
 import json
-from pathlib import Path
 import sqlite3
 import time
 import uuid
+from contextlib import contextmanager
+from dataclasses import asdict
+from pathlib import Path
 
 from hentai_telegram.domain.models import Chapter, Manga, Page, normalize_tags
 
@@ -160,7 +160,7 @@ class Store:
         row = self.connection.execute("SELECT * FROM tasks WHERE id=?", (task_id,)).fetchone()
         return dict(row) if row else None
 
-    def check_submission(self, source: str, source_id: str, user_id: int):
+    def check_submission(self, source: str, source_id: str, user_id: int, force: bool = False):
         row = self.connection.execute(
             """SELECT t.id, t.status, t.user_id FROM tasks t
                JOIN manga m ON m.id = t.manga_id
@@ -171,7 +171,9 @@ class Store:
         ).fetchone()
         if row:
             if row["status"] == "COMPLETED":
-                raise ValueError("该漫画已经转存并发布到频道了。若需重新发布，请联系管理员")
+                if not force:
+                    raise ValueError("该漫画已完成并发布到频道。如需强制重新抓取发布，请使用：/jm <ID> force")
+                return
             raise ValueError(f"该漫画已有正在处理的任务 (状态: {row['status']})")
 
     def submit(
@@ -181,6 +183,7 @@ class Store:
         chat_id: int,
         message_id: int | None = None,
         retry_of: str | None = None,
+        force: bool = False,
     ) -> dict:
         now = time.time()
         with self.transaction() as db:
@@ -200,6 +203,8 @@ class Store:
                         manga_id,
                     ),
                 )
+                if force:
+                    db.execute("UPDATE chapters SET telegraph_url=NULL, status='PENDING' WHERE manga_id=?", (manga_id,))
             else:
                 cursor = db.execute(
                     "INSERT INTO manga(source, source_id, title, authors, tags, cover_url, created_at) "

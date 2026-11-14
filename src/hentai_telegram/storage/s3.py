@@ -1,8 +1,8 @@
 import asyncio
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
-import uuid
 
 import boto3
 from botocore.config import Config

@@ -1,4 +1,6 @@
 import json
+from html import escape
+
 from hentai_telegram.services.channel_push import channel_post_link
 
 STATUS = {
@@ -17,27 +19,28 @@ STATUS = {
 
 def describe_task(task: dict, channel_id: str = "") -> str:
     manga = json.loads(task["snapshot"]) if isinstance(task["snapshot"], str) else task["snapshot"]
-    title = str(manga.get("title", "未知标题"))[:200]
+    title = escape(str(manga.get("title", "未知标题"))[:200])
+    source_id = escape(str(manga.get("source_id", "")))
     status_str = STATUS.get(task["status"], task["status"])
 
     lines = [
         f"📖 <b>{title}</b>",
-        f"🆔 漫画 ID：<code>JM{manga.get('source_id', '')}</code>",
+        f"🆔 漫画 ID：<code>JM{source_id}</code>",
         f"📊 状态：{status_str}",
     ]
 
     if task.get("progress"):
-        lines.append(f"⚡ 进度：{task['progress']}")
+        lines.append(f"⚡ 进度：{escape(str(task['progress']))}")
 
     if task.get("channel_message_id") and channel_id:
         link = channel_post_link(channel_id, task["channel_message_id"])
         lines.append(f"📢 频道消息：<a href=\"{link}\">点击查看频道推文</a>")
 
     if task.get("error"):
-        lines.append(f"⚠️ 提示：{task['error']}")
+        lines.append(f"⚠️ 提示：{escape(str(task['error']))}")
 
     lines.extend([
         "",
-        f"🔖 任务编号：<code>{task['id']}</code>",
+        f"🔖 任务编号：<code>{escape(str(task['id']))}</code>",
     ])
     return "\n".join(lines)

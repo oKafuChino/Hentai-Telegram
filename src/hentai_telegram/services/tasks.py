@@ -14,13 +14,20 @@ class TaskService:
         if self.allowed_user_ids and user_id not in self.allowed_user_ids:
             raise ValueError("抱歉，本机器人为私有频道管理机器人，仅管理员可用。")
 
-    async def download(self, reference: str, user_id: int, chat_id: int, message_id: int | None = None) -> dict:
+    async def download(
+        self,
+        reference: str,
+        user_id: int,
+        chat_id: int,
+        message_id: int | None = None,
+        force: bool = False,
+    ) -> dict:
         self.authorize(user_id)
         source_id = parse_reference(reference, self.domains)
-        self.store.check_submission(getattr(self.provider, "source", "jmcomic"), source_id, user_id)
+        self.store.check_submission(getattr(self.provider, "source", "jmcomic"), source_id, user_id, force=force)
         manga: Manga = await self.provider.get_manga(source_id)
         self.authorize(user_id)
-        return self.store.submit(manga, user_id, chat_id, message_id=message_id)
+        return self.store.submit(manga, user_id, chat_id, message_id=message_id, force=force)
 
     def get(self, task_id: str, user_id: int) -> dict:
         self.authorize(user_id)

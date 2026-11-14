@@ -1,9 +1,9 @@
-from contextlib import closing, contextmanager
 import json
 import logging
 import os
-from pathlib import Path
 import sqlite3
+from contextlib import closing, contextmanager
+from pathlib import Path
 
 
 @contextmanager

@@ -1,10 +1,10 @@
 """Interactive installer configuration. Never source dotenv as shell code."""
 import getpass
 import os
-from pathlib import Path
 import re
 import sys
 import tempfile
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 ENV = ROOT / ".env"

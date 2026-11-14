@@ -3,6 +3,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Any
+
 import aiohttp
 
 from hentai_telegram.domain.errors import JobError

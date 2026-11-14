@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 async def run(settings: Settings, db_path, recent_logs):
     from aiogram import Bot
+
     from hentai_telegram.bot.app import create_dispatcher, progress_updater
 
     provider_type = CommandProvider if os.getenv("PROVIDER_COMMAND") else JmProvider

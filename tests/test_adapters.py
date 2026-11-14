@@ -1,15 +1,16 @@
-import importlib.util
-import asyncio
 import io
-from pathlib import Path
-import tempfile
 import json
-import sys
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from hentai_telegram.providers.jm_adapter import handle, classify_error, initialize_client, StageError
-from hentai_telegram.domain.errors import JobError
+from hentai_telegram.providers.jm_adapter import (
+    StageError,
+    classify_error,
+    handle,
+    initialize_client,
+)
 
 
 class Photo:

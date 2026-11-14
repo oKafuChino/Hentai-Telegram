@@ -1,5 +1,7 @@
 import logging
+from html import escape
 from pathlib import Path
+
 from aiogram import Bot
 from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
 
@@ -58,14 +60,16 @@ class ChannelPublisher:
             raise ValueError("未配置 TELEGRAM_CHANNEL_ID，无法发布至频道")
 
         target = int(self.channel_id) if self.channel_id.lstrip("-").isdigit() else self.channel_id
-        authors = ", ".join(manga.authors) if manga.authors else "未知"
-        tags = ", ".join(manga.tags[:15]) if manga.tags else "无"
+        authors_text = escape(", ".join(manga.authors) if manga.authors else "未知")
+        tags_text = escape(", ".join(manga.tags[:15]) if manga.tags else "无")
+        title_text = escape(manga.title)
+        source_id_text = escape(str(manga.source_id))
 
         caption_lines = [
-            f"📚 <b>{manga.title}</b>",
-            f"👨‍🎨 作者：{authors}",
-            f"🏷 标签：{tags}",
-            f"🔢 漫画 ID：<code>JM{manga.source_id}</code>",
+            f"📚 <b>{title_text}</b>",
+            f"👨‍🎨 作者：{authors_text}",
+            f"🏷 标签：{tags_text}",
+            f"🔢 漫画 ID：<code>JM{source_id_text}</code>",
             "",
             "📖 <b>在线阅读（Telegraph）</b>：",
         ]
@@ -78,22 +82,38 @@ class ChannelPublisher:
             for ch in chapters:
                 url = ch.get("telegraph_url") or "#"
                 ordinal = ch.get("ordinal", 1)
-                title = ch.get("title", f"第 {ordinal} 话")
+                title = escape(ch.get("title", f"第 {ordinal} 话"))
                 caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
         else:
             if manga.index_url:
                 caption_lines.append(f'• <a href="{manga.index_url}">📑 查看全本完整目录（共 {len(chapters)} 话）</a>')
             for ch in chapters[:5]:
                 url = ch.get("telegraph_url") or "#"
-                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{ch["title"]}</a>')
+                title = escape(ch.get("title", f"第 {ch['ordinal']} 话"))
+                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{title}</a>')
             caption_lines.append("• ... （更多章节请查看完整目录）")
             for ch in chapters[-3:]:
                 url = ch.get("telegraph_url") or "#"
-                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{ch["title"]}</a>')
+                title = escape(ch.get("title", f"第 {ch['ordinal']} 话"))
+                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{title}</a>')
 
-        caption = "\n".join(caption_lines)
-        if len(caption) > 1024:
-            caption = caption[:1000] + "...\n(详见目录链接)"
+        # Safely constrain caption length to avoid breaking HTML tags or exceeding Telegram's 1024 limit
+        safe_lines = []
+        current_len = 0
+        limit = 950
+        truncated = False
+        for line in caption_lines:
+            if current_len + len(line) + 1 > limit and not truncated:
+                if manga.index_url:
+                    safe_lines.append(f'• <a href="{manga.index_url}">📑 更多章节详见全本目录...</a>')
+                else:
+                    safe_lines.append("• ... (更多章节请在线阅读)")
+                truncated = True
+                break
+            safe_lines.append(line)
+            current_len += len(line) + 1
+
+        caption = "\n".join(safe_lines)
 
         # Inline Keyboard
         buttons: list[list[InlineKeyboardButton]] = []

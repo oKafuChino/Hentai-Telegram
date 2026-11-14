@@ -1,17 +1,16 @@
 from __future__ import annotations
 
-from html import escape
 import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import re
-import zipfile
 import tempfile
+import zipfile
+from html import escape
+from pathlib import Path
 
 from hentai_telegram.domain.errors import JobError
-
 from hentai_telegram.domain.models import Chapter, Manga, normalize_tags
 
 _INVALID = re.compile(r"[<>:\"/\\|?*\x00-\x1f]")

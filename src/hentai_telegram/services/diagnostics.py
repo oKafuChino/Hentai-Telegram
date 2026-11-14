@@ -1,9 +1,10 @@
-from collections import deque
 import logging
 import os
 import re
 import shutil
 import time
+from collections import deque
+from html import escape
 
 from hentai_telegram.services.users import UserService
 
@@ -62,9 +63,9 @@ class Diagnostics:
         if self.publisher and self.publisher.channel_id:
             try:
                 info = await self.publisher.verify_channel()
-                channel_status = f"正常 ({info.get('title', self.publisher.channel_id)})"
+                channel_status = escape(f"正常 ({info.get('title', self.publisher.channel_id)})")
             except Exception as exc:
-                channel_status = f"异常 ({exc})"
+                channel_status = escape(f"异常 ({exc})")
 
         task_lines = "\n".join(f"• {r[0]}: {r[1]}" for r in rows) or "• 暂无任务"
 

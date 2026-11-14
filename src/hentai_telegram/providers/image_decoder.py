@@ -1,9 +1,9 @@
 """One-page image worker. Must never import jmcomic or its HTTP dependencies."""
 import errno
 import json
-from pathlib import Path
 import sys
 import warnings
+from pathlib import Path
 
 from hentai_telegram.domain.errors import JobError
 from hentai_telegram.storage.cbz import validate_image, validate_image_file

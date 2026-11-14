@@ -1,11 +1,11 @@
 """Isolated provider bridge using JSON on stdin/stdout and no shell."""
 import asyncio
 import json
-import os
-from pathlib import Path
-import signal
 import logging
+import os
 import re
+import signal
+from pathlib import Path
 
 from hentai_telegram.domain.errors import JobError
 from hentai_telegram.domain.models import Chapter, Manga, Page, normalize_tags

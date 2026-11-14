@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 import json
 import os
 import sys
+from dataclasses import dataclass, field
 
 
 def _int(name: str, default: int) -> int:

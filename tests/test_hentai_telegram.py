@@ -1,15 +1,15 @@
-import asyncio
 import io
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from PIL import Image
 
+from hentai_telegram.bot.presentation import describe_task
 from hentai_telegram.config import Settings
-from hentai_telegram.db.store import Store, decode_manga
+from hentai_telegram.db.store import Store
 from hentai_telegram.domain.models import Chapter, Manga, Page
 from hentai_telegram.integrations.telegraph import TelegraphClient
 from hentai_telegram.runtime import instance_lock
@@ -206,6 +206,37 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         # Ensure post called the catbox endpoint
         call_args = session.post.call_args
         self.assertEqual(call_args[0][0], "https://catbox.moe/user/api.php")
+
+    def test_describe_task_escapes_html(self):
+        task = {
+            "id": "abc12345",
+            "snapshot": json.dumps({"title": "<Script>Alert('XSS')</Script> & Test", "source_id": "123"}),
+            "status": "DOWNLOADING",
+            "progress": "Downloading <page 1>",
+            "error": "Error: <forbidden>",
+            "channel_message_id": None,
+        }
+        rendered = describe_task(task)
+        self.assertNotIn("<Script>", rendered)
+        self.assertIn("&lt;Script&gt;", rendered)
+        self.assertIn("&amp; Test", rendered)
+        self.assertIn("&lt;page 1&gt;", rendered)
+        self.assertIn("&lt;forbidden&gt;", rendered)
+
+    async def test_resubmit_force_flag(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        task1 = await svc.download("12345", 1001, 1001)
+        self.store.finish(task1["id"], "COMPLETED")
+
+        # Without force, should raise ValueError suggesting force
+        with self.assertRaises(ValueError) as ctx:
+            await svc.download("12345", 1001, 1001, force=False)
+        self.assertIn("force", str(ctx.exception))
+
+        # With force=True, should succeed
+        task2 = await svc.download("12345", 1001, 1001, force=True)
+        self.assertNotEqual(task1["id"], task2["id"])
+        self.assertEqual(task2["status"], "QUEUED")
 
 
 if __name__ == "__main__":
