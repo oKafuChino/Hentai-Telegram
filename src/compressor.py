@@ -53,9 +53,10 @@ def compress_single_image(
         task: (index, image_path, config)
 
     Returns:
-        List of (filename, webp_bytes) tuples.
-        Single image format: '001.webp'
-        Sliced format: '001_01.webp', '001_02.webp'
+        List of (filename, image_bytes) tuples.
+        Format defaults to JPEG for 100% Telegram Instant View compatibility.
+        Single image format: '001.jpg'
+        Sliced format: '001_01.jpg', '001_02.jpg'
     """
     idx, image_path, config = task
     p = Path(image_path)
@@ -93,12 +94,31 @@ def compress_single_image(
     w, h = img.size
     slices: list[tuple[str, bytes]] = []
 
+    # Format selection (JPEG is required for Telegram Instant View compatibility)
+    fmt = (getattr(config, "image_format", "JPEG") or "JPEG").upper()
+    is_jpeg = fmt in ("JPEG", "JPG")
+    ext = ".jpg" if is_jpeg else ".webp"
+
+    def _encode_to_bytes(part_img: Image.Image) -> bytes:
+        buf = io.BytesIO()
+        if is_jpeg:
+            save_kw = {
+                "format": "JPEG",
+                "quality": target_quality,
+                "optimize": True,
+                "progressive": True,
+            }
+            if part_img.mode == "RGB":
+                save_kw["subsampling"] = "4:2:0"
+            part_img.save(buf, **save_kw)
+        else:
+            part_img.save(buf, format="WEBP", quality=target_quality, method=6)
+        return buf.getvalue()
+
     # Strip cutting / slicing
     if h <= config.max_slice_height:
-        buf = io.BytesIO()
-        img.save(buf, format="WEBP", quality=target_quality, method=6)
-        filename = f"{idx:03d}.webp"
-        slices.append((filename, buf.getvalue()))
+        filename = f"{idx:03d}{ext}"
+        slices.append((filename, _encode_to_bytes(img)))
     else:
         cuts: list[tuple[int, int]] = []
         y = 0
@@ -115,10 +135,8 @@ def compress_single_image(
 
         for s_idx, (y_start, y_end) in enumerate(cuts, start=1):
             part = img.crop((0, y_start, w, y_end))
-            buf = io.BytesIO()
-            part.save(buf, format="WEBP", quality=target_quality, method=6)
-            filename = f"{idx:03d}_{s_idx:02d}.webp"
-            slices.append((filename, buf.getvalue()))
+            filename = f"{idx:03d}_{s_idx:02d}{ext}"
+            slices.append((filename, _encode_to_bytes(part)))
 
     return slices
 
@@ -163,6 +181,7 @@ def run_compression_benchmark(directory: str | Path, config: CompressConfig) -> 
     print("=" * 60)
     print(f"• 扫描目录: {directory}")
     print(f"• 原始页数: {len(files)} 页")
+    print(f"• 输出格式: {getattr(config, 'image_format', 'JPEG')} (Progressive JPEG 优化)")
     print(f"• 并发进程: {config.cpu_workers}")
     print(f"• 黑白阈值: {config.grayscale_threshold} (宽限制: {config.max_width_bw}px, 质量: {config.quality_bw})")
     print(f"• 彩页配置: (宽限制: {config.max_width_color}px, 质量: {config.quality_color})")
@@ -183,7 +202,7 @@ def run_compression_benchmark(directory: str | Path, config: CompressConfig) -> 
                 else:
                     color_count += 1
         except OSError as exc:
-            logger.debug(f'无法解析图片 {f}: {exc}')
+            logger.debug(f"无法解析图片 {f}: {exc}")
 
     start_time = time.perf_counter()
     slices = compress_chapter(files, config)
@@ -212,9 +231,10 @@ if __name__ == "__main__":
     parser.add_argument("--bw-width", type=int, default=1280, help="黑白页最大宽度 (默认: 1280)")
     parser.add_argument("--color-width", type=int, default=1440, help="彩页最大宽度 (默认: 1440)")
     parser.add_argument("--slice-height", type=int, default=2400, help="切片阈值高度 (默认: 2400)")
-    parser.add_argument("--bw-quality", type=int, default=75, help="黑白页 WebP 质量 (默认: 75)")
-    parser.add_argument("--color-quality", type=int, default=80, help="彩页 WebP 质量 (默认: 80)")
+    parser.add_argument("--bw-quality", type=int, default=75, help="黑白页质量 (默认: 75)")
+    parser.add_argument("--color-quality", type=int, default=80, help="彩页质量 (默认: 80)")
     parser.add_argument("--threshold", type=float, default=3.5, help="黑白判定阈值 (默认: 3.5)")
+    parser.add_argument("--format", default="JPEG", choices=["JPEG", "WEBP"], help="编码格式 (默认: JPEG)")
     args = parser.parse_args()
 
     cfg = CompressConfig(
@@ -225,5 +245,6 @@ if __name__ == "__main__":
         quality_bw=args.bw_quality,
         quality_color=args.color_quality,
         grayscale_threshold=args.threshold,
+        image_format=args.format,
     )
     run_compression_benchmark(args.dir, cfg)

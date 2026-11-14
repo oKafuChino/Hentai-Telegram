@@ -212,9 +212,11 @@ class Worker:
                         if self.settings.image_optimize_enabled:
                             p1 = optimize_image(
                                 p1,
-                                max_width=self.settings.image_max_width,
-                                quality=self.settings.image_jpeg_quality,
-                                min_bytes=self.settings.image_min_compress_bytes,
+                                max_width_bw=self.settings.max_width_bw,
+                                max_width_color=self.settings.max_width_color,
+                                quality_bw=self.settings.quality_bw,
+                                quality_color=self.settings.quality_color,
+                                grayscale_threshold=self.settings.grayscale_threshold,
                             )
                         shutil.copy2(p1, cover_path)
 
@@ -238,9 +240,11 @@ class Worker:
                     if self.settings.image_optimize_enabled:
                         img_file = optimize_image(
                             img_file,
-                            max_width=self.settings.image_max_width,
-                            quality=self.settings.image_jpeg_quality,
-                            min_bytes=self.settings.image_min_compress_bytes,
+                            max_width_bw=self.settings.max_width_bw,
+                            max_width_color=self.settings.max_width_color,
+                            quality_bw=self.settings.quality_bw,
+                            quality_color=self.settings.quality_color,
+                            grayscale_threshold=self.settings.grayscale_threshold,
                         )
 
                     s3_key = None

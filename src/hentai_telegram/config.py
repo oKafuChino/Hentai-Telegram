@@ -47,6 +47,11 @@ class Settings:
     image_jpeg_quality: int = 85
     image_max_width: int = 1600
     image_min_compress_bytes: int = 100 * 1024
+    max_width_bw: int = 1280
+    max_width_color: int = 1440
+    quality_bw: int = 75
+    quality_color: int = 80
+    grayscale_threshold: float = 3.5
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -124,6 +129,14 @@ class Settings:
         jpeg_quality = _int("IMAGE_JPEG_QUALITY", 85)
         max_width = _int("IMAGE_MAX_WIDTH", 1600)
         min_bytes = _int("IMAGE_MIN_COMPRESS_BYTES", 100 * 1024)
+        max_w_bw = _int("MAX_WIDTH_BW", 1280)
+        max_w_color = _int("MAX_WIDTH_COLOR", 1440)
+        q_bw = _int("QUALITY_BW", 75)
+        q_color = _int("QUALITY_COLOR", 80)
+        try:
+            gray_th = float(os.getenv("GRAYSCALE_THRESHOLD", "3.5"))
+        except ValueError:
+            gray_th = 3.5
 
         return cls(
             telegram_bot_token=token,
@@ -160,6 +173,11 @@ class Settings:
             image_jpeg_quality=max(50, min(jpeg_quality, 95)),
             image_max_width=max(0, max_width),
             image_min_compress_bytes=max(0, min_bytes),
+            max_width_bw=max(0, max_w_bw),
+            max_width_color=max(0, max_w_color),
+            quality_bw=max(50, min(q_bw, 95)),
+            quality_color=max(50, min(q_color, 95)),
+            grayscale_threshold=gray_th,
         )
 
     def __post_init__(self):

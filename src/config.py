@@ -11,15 +11,16 @@ class CompressConfig(BaseModel):
     max_width_bw: int = Field(default=1280, description="黑白页最大宽度")
     max_width_color: int = Field(default=1440, description="彩页最大宽度")
     max_slice_height: int = Field(default=2400, description="条漫切片阈值高度")
-    quality_bw: int = Field(default=75, description="黑白页 WebP 质量 (0-100)")
-    quality_color: int = Field(default=80, description="彩页 WebP 质量 (0-100)")
+    quality_bw: int = Field(default=75, description="黑白页编码质量 (0-100)")
+    quality_color: int = Field(default=80, description="彩页编码质量 (0-100)")
     grayscale_threshold: float = Field(default=3.5, description="黑白/彩色通道差异判别阈值")
+    image_format: str = Field(default="JPEG", description="输出图片格式 (JPEG/WEBP，Telegram Instant View 需使用 JPEG)")
 
 
 class Settings(BaseSettings):
     """Application settings loaded from environment variables and .env file."""
 
-    # --- Cloudflare R2 配置 ---
+    # --- Cloudflare R2 / S3 配置 ---
     r2_account_id: str = Field(default="", description="Cloudflare 账号 ID")
     r2_access_key_id: str = Field(default="", description="R2 Access Key ID")
     r2_secret_access_key: str = Field(default="", description="R2 Secret Access Key")
@@ -32,9 +33,10 @@ class Settings(BaseSettings):
     max_width_bw: int = Field(default=1280, description="黑白页最大宽度限制")
     max_width_color: int = Field(default=1440, description="彩页最大宽度限制")
     max_slice_height: int = Field(default=2400, description="条漫自动横向切片高度")
-    quality_bw: int = Field(default=75, description="黑白页 WebP 编码质量")
-    quality_color: int = Field(default=80, description="彩页 WebP 编码质量")
+    quality_bw: int = Field(default=75, description="黑白页编码质量")
+    quality_color: int = Field(default=80, description="彩页编码质量")
     grayscale_threshold: float = Field(default=3.5, description="灰度识别阈值")
+    image_format: str = Field(default="JPEG", description="图片格式 (默认 JPEG 保证 Instant View 兼容)")
 
     # --- Telegraph 与分页配置 ---
     telegraph_short_name: str = Field(default="MangaBot", description="Telegraph 短名")
@@ -44,9 +46,7 @@ class Settings(BaseSettings):
 
     # --- Telegram Bot 配置 ---
     tg_bot_token: str = Field(default="", description="Telegram Bot Token")
-    tg_cache_chat_id: str = Field(default="", description="预热缓存私有频道 ID")
     tg_main_chat_id: str = Field(default="", description="正式发布频道 ID")
-    prewarm_delay_seconds: int = Field(default=8, description="预热爬虫抓取等待秒数")
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -65,4 +65,5 @@ class Settings(BaseSettings):
             quality_bw=self.quality_bw,
             quality_color=self.quality_color,
             grayscale_threshold=self.grayscale_threshold,
+            image_format=self.image_format,
         )

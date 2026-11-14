@@ -1,6 +1,6 @@
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 from PIL import Image
 
@@ -22,7 +22,7 @@ class TestOptimizer(unittest.TestCase):
         img.save(src, "PNG")
         orig_size = src.stat().st_size
 
-        opt = optimize_image(src, max_width=1600, quality=85)
+        opt = optimize_image(src, max_width_bw=1600, quality=85)
         self.assertEqual(opt.suffix, ".jpg")
         self.assertTrue(opt.is_file())
         self.assertFalse(src.exists())  # Original was replaced
@@ -33,17 +33,18 @@ class TestOptimizer(unittest.TestCase):
             self.assertEqual(res.format, "JPEG")
 
     def test_optimize_rgba_transparency(self):
-        # Create an RGBA image with transparent parts
+        # Create an RGBA image with transparent background
         img = Image.new("RGBA", (800, 1000), (0, 0, 0, 0))
         src = self.root / "transparent.png"
         img.save(src, "PNG")
 
-        opt = optimize_image(src, max_width=1600, quality=85)
+        opt = optimize_image(src, max_width_bw=1600, quality=85)
         self.assertEqual(opt.suffix, ".jpg")
         with Image.open(opt) as res:
-            self.assertEqual(res.mode, "RGB")
-            # Transparent background should become solid white (255, 255, 255)
-            self.assertEqual(res.getpixel((10, 10)), (255, 255, 255))
+            # Fully transparent composited onto white is B&W -> 'L' mode
+            self.assertIn(res.mode, ("L", "RGB"))
+            # Transparent background should become solid white (255)
+            self.assertEqual(res.getpixel((10, 10)) if res.mode == "L" else res.getpixel((10, 10))[0], 255)
 
     def test_skip_already_small_jpeg(self):
         # Create a tiny JPEG under 100KB

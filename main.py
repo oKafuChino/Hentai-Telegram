@@ -97,9 +97,9 @@ def run_pipeline(
 
     # 5. Telegram Bot Layer: cache prewarming and channel push
     if skip_tg:
-        logger.info("已指定 --skip-tg，跳过 Telegram 预热与推送")
+        logger.info("已指定 --skip-tg，跳过 Telegram 频道推送")
     else:
-        logger.info("触发 Telegram Instant View 预热与正式频道推送...")
+        logger.info("向 Telegram 正式频道推送消息并生成 Instant View 即时预览...")
         send_channel_notification_sync(
             settings=settings,
             title=title,

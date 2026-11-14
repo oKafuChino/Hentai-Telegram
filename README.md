@@ -19,7 +19,7 @@
   - **条漫智能切片**：对高度超过 `2400px` 的长图自动横向切割；尾段不足 `300px` 自动合并，杜绝细碎裂片。
   - **全程内存流式**：所有缩放、切片、编码均在 `io.BytesIO` 内存中完成，不产生任何本地临时文件。
 - **超长章节自动分页与双向导航**：单话切片超过 100 张时，自动切分为（上）、（下）分卷发布并双向注入互跳导航条，防止 Telegram 爬虫抓取超时。
-- **Instant View 缓存预热机制**：发布前先发送至私有缓存频道，等待 8 秒供 Telegram 官方爬虫完成 R2 图片抓取与缓存建立，确保主频道用户打开时 100% 秒级展示。
+- **原生 Instant View 即时预览卡片直发**：直接向主频道发送消息，采用 Telegram 原生 Link Preview Options 规范（锁定 Telegraph 链接并启用大图媒体卡片展示），直接在主频道消息顶部生成包含封面大图与“⚡ Instant View”极速阅读按钮的卡片，免去私有预热频道的繁琐配置。
 - **纯私密管理员模式**：无公开交互，仅管理员可提交任务，杜绝非授权滥用与资源消耗。
 
 ---
@@ -206,7 +206,7 @@ python -m src.compressor --dir ./downloads/1001/01 --workers 2
 # 2. 流水线预演模式 (DRY RUN，打印原图/压缩后体积、缩减比例及切片统计)
 python main.py --dir ./downloads/1001/01 --id 1001 --ch 1 --title "示例漫画 第01话" --dry-run
 
-# 3. 完整端到端发布 (流式切片压缩 -> R2 并发上传 -> Telegraph 分页 -> Telegram 预热并发布)
+# 3. 完整端到端发布 (流式切片压缩 -> R2 并发上传 -> Telegraph 分页 -> Telegram 主频道直发生成 Instant View)
 python main.py --dir ./downloads/1001/01 --id 1001 --ch 1 --title "示例漫画 第01话" --tags "同人,全彩"
 ```
 

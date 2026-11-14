@@ -1,4 +1,4 @@
-"""Telegram Instant View prewarming and channel push module using aiogram."""
+"""Telegram main channel push module with native Instant View generation using aiogram."""
 
 import asyncio
 import html
@@ -20,38 +20,16 @@ logger = setup_logger("tg_bot")
 
 
 class TelegramNotifier:
-    """Handles Instant View cache prewarming and structured channel publication."""
+    """Handles structured channel publication with native Instant View card generation."""
 
     def __init__(self, settings: Settings):
         self.settings = settings
         self.token = settings.tg_bot_token
-        self.cache_chat_id = settings.tg_cache_chat_id
         self.main_chat_id = settings.tg_main_chat_id
-        self.prewarm_delay = max(0, settings.prewarm_delay_seconds)
 
     def is_configured(self) -> bool:
         """Check if Telegram Bot token and main channel are provided."""
         return bool(self.token and self.main_chat_id)
-
-    async def prewarm_instant_view(self, bot: Bot, telegraph_urls: Sequence[str]) -> None:
-        """Send links to private cache channel to trigger Telegram Instant View crawler."""
-        if not self.cache_chat_id:
-            logger.info("未配置 TG_CACHE_CHAT_ID，跳过 Instant View 预热")
-            return
-
-        logger.info(f"正在向缓存频道 [{self.cache_chat_id}] 发送预热链接...")
-        for url in telegraph_urls:
-            try:
-                await bot.send_message(
-                    chat_id=self.cache_chat_id,
-                    text=f"🔄 Instant View Prewarm:\n{url}",
-                    link_preview_options=LinkPreviewOptions(is_disabled=False),
-                )
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"预热发送失败 [{url}]: {e}")
-
-        logger.info(f"等待 {self.prewarm_delay} 秒供 Telegram 爬虫抓取 R2 图片并建立永久 Instant View 缓存...")
-        await asyncio.sleep(self.prewarm_delay)
 
     async def publish_to_main_channel(
         self,
@@ -62,7 +40,7 @@ class TelegramNotifier:
         tags: Sequence[str] | None = None,
         cover_url: str | None = None,
     ) -> None:
-        """Publish final structured announcement message to main channel."""
+        """Publish structured announcement message directly to main channel with Instant View card."""
         if not self.main_chat_id:
             logger.info("未配置 TG_MAIN_CHAT_ID，跳过主频道推送")
             return
@@ -97,27 +75,24 @@ class TelegramNotifier:
 
         caption = "\n".join(lines)
 
-        logger.info(f"向正式频道 [{self.main_chat_id}] 推送排版消息...")
-        if cover_url:
-            try:
-                await bot.send_photo(
-                    chat_id=self.main_chat_id,
-                    photo=cover_url,
-                    caption=caption,
-                )
-                logger.info("✅ 频道图文消息推送成功！")
-                return
-            except Exception as e:  # noqa: BLE001
-                logger.warning(f"封面图文消息推送失败，降级为纯文本消息: {e}")
+        # Pin preview to the first Telegraph URL to generate native Instant View card
+        primary_url = telegraph_urls[0] if telegraph_urls else None
+        link_preview_options = LinkPreviewOptions(
+            is_disabled=False,
+            url=primary_url,
+            prefer_large_media=True,
+            show_above_text=True,
+        )
 
+        logger.info(f"向正式频道 [{self.main_chat_id}] 直接推送消息并生成 Instant View...")
         await bot.send_message(
             chat_id=self.main_chat_id,
             text=caption,
-            link_preview_options=LinkPreviewOptions(is_disabled=False),
+            link_preview_options=link_preview_options,
         )
-        logger.info("✅ 频道消息推送成功！")
+        logger.info("✅ 频道消息推送成功，Instant View 即时预览已生成！")
 
-    async def prewarm_and_publish(
+    async def publish(
         self,
         title: str,
         chapter_num: str,
@@ -125,14 +100,13 @@ class TelegramNotifier:
         tags: Sequence[str] | None = None,
         cover_url: str | None = None,
     ) -> None:
-        """Run complete Telegram flow: prewarm cache followed by main channel publication."""
+        """Directly publish announcement to main channel."""
         if not self.is_configured():
             logger.warning("Telegram Bot 未完整配置 (缺少 TG_BOT_TOKEN 或 TG_MAIN_CHAT_ID)，跳过 Telegram 推送")
             return
 
         bot = Bot(token=self.token, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
         try:
-            await self.prewarm_instant_view(bot, telegraph_urls)
             await self.publish_to_main_channel(
                 bot,
                 title=title,
@@ -153,13 +127,13 @@ def send_channel_notification_sync(
     tags: Sequence[str] | None = None,
     cover_url: str | None = None,
 ) -> None:
-    """Synchronous wrapper for running prewarm and publish in an event loop."""
+    """Synchronous wrapper for publishing to main channel."""
     notifier = TelegramNotifier(settings)
     if not notifier.is_configured():
         logger.info("未配置 Telegram 凭据，跳过频道通知")
         return
     asyncio.run(
-        notifier.prewarm_and_publish(
+        notifier.publish(
             title=title,
             chapter_num=chapter_num,
             telegraph_urls=telegraph_urls,

@@ -238,6 +238,26 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertNotEqual(task1["id"], task2["id"])
         self.assertEqual(task2["status"], "QUEUED")
 
+    async def test_channel_publisher_instant_view(self):
+        bot = AsyncMock()
+        mock_msg = MagicMock()
+        mock_msg.message_id = 888
+        bot.send_message.return_value = mock_msg
+
+        publisher = ChannelPublisher(bot, "-1001234567890")
+        manga = Manga("jmcomic", "12345", "测试漫画")
+        chapters = [{"ordinal": 1, "title": "第1话", "telegraph_url": "https://telegra.ph/manga-1"}]
+
+        msg_id = await publisher.publish(manga, chapters)
+        self.assertEqual(msg_id, 888)
+        bot.send_message.assert_called_once()
+        _, kwargs = bot.send_message.call_args
+        self.assertEqual(kwargs["chat_id"], -1001234567890)
+        preview_opt = kwargs["link_preview_options"]
+        self.assertEqual(preview_opt.url, "https://telegra.ph/manga-1")
+        self.assertTrue(preview_opt.prefer_large_media)
+        self.assertTrue(preview_opt.show_above_text)
+
 
 if __name__ == "__main__":
     unittest.main()

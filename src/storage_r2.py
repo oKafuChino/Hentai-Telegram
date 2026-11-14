@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
 
 import boto3
 from botocore.config import Config
@@ -69,11 +70,13 @@ class R2StorageClient:
     ) -> tuple[str, str]:
         """Upload one slice to Cloudflare R2 with mandatory caching headers."""
         key = self.build_key(manga_id, chapter_num, slice_filename)
+        ext = Path(slice_filename).suffix.lower()
+        content_type = "image/jpeg" if ext in (".jpg", ".jpeg") else "image/webp"
         self.s3.put_object(
             Bucket=self.bucket,
             Key=key,
             Body=data,
-            ContentType="image/webp",
+            ContentType=content_type,
             CacheControl="public, max-age=31536000",
         )
         url = self.build_public_url(key)

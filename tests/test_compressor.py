@@ -52,14 +52,15 @@ class TestCompressorAndUtils(unittest.TestCase):
                 max_width_bw=1280,
                 max_width_color=1440,
                 max_slice_height=2400,
+                image_format="JPEG",
             )
             slices = compress_single_image((1, str(p), cfg))
             self.assertEqual(len(slices), 1)
             filename, data = slices[0]
-            self.assertEqual(filename, "001.webp")
-            # Verify WebP output
+            self.assertEqual(filename, "001.jpg")
+            # Verify JPEG output for Instant View
             with Image.open(io.BytesIO(data)) as out_img:
-                self.assertEqual(out_img.format, "WEBP")
+                self.assertEqual(out_img.format, "JPEG")
                 self.assertEqual(out_img.size, (800, 1200))
 
     def test_compress_single_image_slice_with_tail_merge(self):
@@ -72,16 +73,19 @@ class TestCompressorAndUtils(unittest.TestCase):
             cfg = CompressConfig(
                 cpu_workers=1,
                 max_slice_height=2400,
+                image_format="JPEG",
             )
             slices = compress_single_image((2, str(p), cfg))
             self.assertEqual(len(slices), 2)
-            self.assertEqual(slices[0][0], "002_01.webp")
-            self.assertEqual(slices[1][0], "002_02.webp")
+            self.assertEqual(slices[0][0], "002_01.jpg")
+            self.assertEqual(slices[1][0], "002_02.jpg")
 
             with Image.open(io.BytesIO(slices[0][1])) as s1:
                 self.assertEqual(s1.size, (1000, 2400))
+                self.assertEqual(s1.format, "JPEG")
             with Image.open(io.BytesIO(slices[1][1])) as s2:
                 self.assertEqual(s2.size, (1000, 2600))
+                self.assertEqual(s2.format, "JPEG")
 
     def test_compress_chapter(self):
         with tempfile.TemporaryDirectory() as tmp_dir:
@@ -92,10 +96,10 @@ class TestCompressorAndUtils(unittest.TestCase):
                 img.save(p)
                 paths.append(p)
 
-            cfg = CompressConfig(cpu_workers=2)
+            cfg = CompressConfig(cpu_workers=2, image_format="JPEG")
             results = compress_chapter(paths, cfg)
             self.assertEqual(len(results), 3)
-            self.assertEqual([r[0] for r in results], ["001.webp", "002.webp", "003.webp"])
+            self.assertEqual([r[0] for r in results], ["001.jpg", "002.jpg", "003.jpg"])
 
 
 if __name__ == "__main__":

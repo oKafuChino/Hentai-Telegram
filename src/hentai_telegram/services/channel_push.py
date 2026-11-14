@@ -135,32 +135,30 @@ class ChannelPublisher:
 
         reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
 
-        # Cover photo
-        photo = None
-        if cover_path and cover_path.is_file():
-            try:
-                photo = BufferedInputFile(cover_path.read_bytes(), filename="cover.jpg")
-            except OSError as exc:
-                logger.warning("read_cover_failed error=%s", exc)
+        # Determine primary Telegraph URL to generate Instant View card
+        preview_url = None
+        if chapters and chapters[0].get("telegraph_url"):
+            preview_url = chapters[0]["telegraph_url"]
+        elif manga.index_url:
+            preview_url = manga.index_url
+
+        from aiogram.types import LinkPreviewOptions
+        link_preview_options = LinkPreviewOptions(
+            is_disabled=False,
+            url=preview_url,
+            prefer_large_media=True,
+            show_above_text=True,
+        )
 
         for attempt in range(3):
             try:
-                if photo:
-                    msg = await self.bot.send_photo(
-                        chat_id=target,
-                        photo=photo,
-                        caption=caption,
-                        reply_markup=reply_markup,
-                        parse_mode="HTML",
-                    )
-                else:
-                    msg = await self.bot.send_message(
-                        chat_id=target,
-                        text=caption,
-                        reply_markup=reply_markup,
-                        parse_mode="HTML",
-                        disable_web_page_preview=False,
-                    )
+                msg = await self.bot.send_message(
+                    chat_id=target,
+                    text=caption,
+                    reply_markup=reply_markup,
+                    parse_mode="HTML",
+                    link_preview_options=link_preview_options,
+                )
                 logger.info("manga_published_to_channel manga=%s message_id=%s", manga.source_id, msg.message_id)
                 return msg.message_id
             except Exception as exc:
