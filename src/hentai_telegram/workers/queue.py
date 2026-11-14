@@ -124,7 +124,7 @@ class Worker:
 
         task_stage = contained(self.staging, task_id)
         task_stage.mkdir(parents=True, exist_ok=True)
-        cover_path = task_stage / "cover.jpg"
+        cover_path = task_stage / f"cover.{self.settings.image_format.lower()}"
 
         channel_url = ""
         if self.settings.telegram_channel_id:
@@ -218,7 +218,9 @@ class Worker:
                                 quality_color=self.settings.quality_color,
                                 grayscale_threshold=self.settings.grayscale_threshold,
                                 min_bytes=self.settings.image_min_compress_bytes,
+                                image_format=self.settings.image_format,
                             )
+                        cover_path = task_stage / f"cover{p1.suffix}"
                         shutil.copy2(p1, cover_path)
 
                 # Upload chapter images
@@ -247,6 +249,7 @@ class Worker:
                             quality_color=self.settings.quality_color,
                             grayscale_threshold=self.settings.grayscale_threshold,
                             min_bytes=self.settings.image_min_compress_bytes,
+                            image_format=self.settings.image_format,
                         )
 
                     s3_key = None

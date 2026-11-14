@@ -94,8 +94,8 @@ def compress_single_image(
     w, h = img.size
     slices: list[tuple[str, bytes]] = []
 
-    # Format selection (JPEG is required for Telegram Instant View compatibility)
-    fmt = (getattr(config, "image_format", "JPEG") or "JPEG").upper()
+    # Format selection (Defaults to WEBP for minimal file size)
+    fmt = (getattr(config, "image_format", "WEBP") or "WEBP").upper()
     is_jpeg = fmt in ("JPEG", "JPG")
     ext = ".jpg" if is_jpeg else ".webp"
 

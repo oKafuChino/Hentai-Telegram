@@ -146,11 +146,12 @@ R2_CUSTOM_DOMAIN=https://img.yourdomain.com
 
 # --- 图像优化配置 ---
 IMAGE_OPTIMIZE_ENABLED=true
+IMAGE_FORMAT=WEBP                 # 默认 WEBP 格式 (method=6 高压缩比，体积比 JPEG 再小 30%~50%)
 IMAGE_MIN_COMPRESS_BYTES=102400   # 100KB 阈值，大于等于该体积的图片必定被压缩优化
 MAX_WIDTH_BW=1280                 # 黑白页限制 1280px，转 8-bit 单通道灰度
 MAX_WIDTH_COLOR=1440              # 彩页限制 1440px
-QUALITY_BW=75                     # 黑白页 Progressive JPEG 质量 (推荐 75)
-QUALITY_COLOR=80                  # 彩页 Progressive JPEG 质量 (推荐 80)
+QUALITY_BW=75                     # 黑白页压缩质量 (推荐 75)
+QUALITY_COLOR=80                  # 彩页压缩质量 (推荐 80)
 GRAYSCALE_THRESHOLD=3.5           # 灰度判定阈值
 MAX_SLICE_HEIGHT=2400             # 条漫切片高度阈值
 ```

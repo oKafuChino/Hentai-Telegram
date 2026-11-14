@@ -36,8 +36,9 @@ def optimize_image(
     max_width: int = 0,
     quality: int = 0,
     min_bytes: int = 0,
+    image_format: str = "WEBP",
 ) -> Path:
-    """Optimize a manga page image into high-efficiency Progressive JPEG.
+    """Optimize a manga page image into high-efficiency WebP or Progressive JPEG.
 
     Features:
     1. Grayscale discrimination: Distinguishes B&W manga pages from color pages.
@@ -46,17 +47,20 @@ def optimize_image(
     2. Proportional downscaling with high-quality Lanczos resampling:
        - B&W pages: restricted to max_width_bw (default 1280px).
        - Color pages: restricted to max_width_color (default 1440px).
-    3. Progressive JPEG encoding:
+    3. High-efficiency encoding:
+       - Default WebP (method=6) for highest compression ratio and minimal bandwidth.
+       - Progressive JPEG (optimize=True, progressive=True) if image_format="JPEG".
        - Strips all EXIF/ICC metadata.
-       - Employs progressive rendering and Huffman table optimization.
-       - 100% compatible with Telegram Instant View (t.me/iv) parser.
-    4. Safe replacement: Always returns the path to the optimized .jpg.
+    4. Safe replacement: Always returns the path to the optimized file (.webp or .jpg).
     """
     if not image_path.is_file():
         return image_path
 
+    fmt = (image_format or "WEBP").strip().upper()
+    target_ext = ".webp" if fmt == "WEBP" else ".jpg"
+
     original_size = image_path.stat().st_size
-    if min_bytes > 0 and original_size < min_bytes and image_path.suffix.lower() in (".jpg", ".jpeg"):
+    if min_bytes > 0 and original_size < min_bytes and image_path.suffix.lower() == target_ext:
         return image_path
 
     # Support legacy parameters if explicitly passed
@@ -67,9 +71,8 @@ def optimize_image(
         quality_bw = min(quality_bw, quality)
         quality_color = min(quality_color, quality)
 
-    original_size = image_path.stat().st_size
-    temp_path = image_path.parent / f"{image_path.stem}.tmp_opt.jpg"
-    target_path = image_path.with_suffix(".jpg")
+    temp_path = image_path.parent / f"{image_path.stem}.tmp_opt{target_ext}"
+    target_path = image_path.with_suffix(target_ext)
 
     try:
         with Image.open(image_path) as raw_im:
@@ -99,30 +102,39 @@ def optimize_image(
             # Viewport downscaling
             orig_w, orig_h = im.size
             if target_w > 0 and orig_w > target_w:
-                new_h = max(1, int(round(orig_h * (target_w / float(orig_w)))))
+                new_h = max(1, round(orig_h * (target_w / float(orig_w))))
                 im = im.resize((target_w, new_h), Image.Resampling.LANCZOS)
 
-            # Progressive JPEG encoding
-            save_kwargs = {
-                "format": "JPEG",
-                "quality": max(50, min(target_q, 95)),
-                "optimize": True,
-                "progressive": True,
-            }
-            if im.mode == "RGB":
-                save_kwargs["subsampling"] = "4:2:0"
+            # Encoding
+            if fmt == "WEBP":
+                save_kwargs = {
+                    "format": "WEBP",
+                    "quality": max(50, min(target_q, 95)),
+                    "method": 6,
+                }
+            else:
+                save_kwargs = {
+                    "format": "JPEG",
+                    "quality": max(50, min(target_q, 95)),
+                    "optimize": True,
+                    "progressive": True,
+                }
+                if im.mode == "RGB":
+                    save_kwargs["subsampling"] = "4:2:0"
 
             im.save(temp_path, **save_kwargs)
             compressed_size = temp_path.stat().st_size
 
-            # Replace original image with compressed progressive JPEG
+            # Replace original image with compressed file
             temp_path.replace(target_path)
             if image_path != target_path and image_path.exists():
                 image_path.unlink()
 
             logger.info(
-                "image_optimized file=%s mode=%s %dKB -> %dKB (%.1f%% saved)",
+                "image_optimized file=%s -> %s format=%s mode=%s %dKB -> %dKB (%.1f%% saved)",
                 image_path.name,
+                target_path.name,
+                fmt,
                 "BW" if is_bw else "Color",
                 original_size // 1024,
                 compressed_size // 1024,
@@ -130,7 +142,7 @@ def optimize_image(
             )
             return target_path
 
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001
         logger.warning("optimize_image_failed file=%s error=%s; using original", image_path.name, exc)
         temp_path.unlink(missing_ok=True)
         return image_path

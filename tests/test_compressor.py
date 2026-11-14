@@ -101,6 +101,21 @@ class TestCompressorAndUtils(unittest.TestCase):
             self.assertEqual(len(results), 3)
             self.assertEqual([r[0] for r in results], ["001.jpg", "002.jpg", "003.jpg"])
 
+    def test_compress_single_image_default_webp(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            p = Path(tmp_dir) / "01.png"
+            img = Image.new("RGB", (600, 800), "red")
+            img.save(p)
+
+            # Default config should use WEBP format
+            cfg = CompressConfig(cpu_workers=1)
+            slices = compress_single_image((1, str(p), cfg))
+            self.assertEqual(len(slices), 1)
+            filename, data = slices[0]
+            self.assertEqual(filename, "001.webp")
+            with Image.open(io.BytesIO(data)) as out_img:
+                self.assertEqual(out_img.format, "WEBP")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,6 +43,7 @@ class Settings:
     s3_public_url: str = ""
     s3_region_name: str = "auto"
     s3_key_prefix: str = "manga/"
+    image_format: str = "WEBP"
     image_optimize_enabled: bool = True
     image_jpeg_quality: int = 85
     image_max_width: int = 1600
@@ -54,7 +55,7 @@ class Settings:
     grayscale_threshold: float = 3.5
 
     @classmethod
-    def from_env(cls) -> "Settings":
+    def from_env(cls) -> Settings:
         token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
         users = os.getenv("TELEGRAM_ALLOWED_USER_IDS", "").strip()
         channel = os.getenv("TELEGRAM_CHANNEL_ID", "").strip()
@@ -126,6 +127,7 @@ class Settings:
         ).strip()
 
         opt_enabled = os.getenv("IMAGE_OPTIMIZE_ENABLED", "true").lower() in {"true", "1", "yes"}
+        img_format = os.getenv("IMAGE_FORMAT", "WEBP").strip().upper()
         jpeg_quality = _int("IMAGE_JPEG_QUALITY", 85)
         max_width = _int("IMAGE_MAX_WIDTH", 1600)
         min_bytes = _int("IMAGE_MIN_COMPRESS_BYTES", 100 * 1024)
@@ -169,6 +171,7 @@ class Settings:
             s3_public_url=s3_public,
             s3_region_name=s3_region,
             s3_key_prefix=s3_prefix,
+            image_format=img_format or "WEBP",
             image_optimize_enabled=opt_enabled,
             image_jpeg_quality=max(50, min(jpeg_quality, 95)),
             image_max_width=max(0, max_width),
