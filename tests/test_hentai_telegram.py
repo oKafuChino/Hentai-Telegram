@@ -266,6 +266,8 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertIn("🆔 漫画 ID：<code>JM12345</code>", caption_text)
         self.assertNotIn("在线阅读（Telegraph）", caption_text)
         self.assertNotIn("点击在线阅读全文", caption_text)
+        self.assertIsNone(kwargs.get("reply_markup"))
+        self.assertTrue(caption_text.index("🆔 漫画 ID：") < caption_text.index("📖 来源:JMComic"))
 
     def test_task_service_authorize_fails_closed(self):
         # Empty whitelist fails closed

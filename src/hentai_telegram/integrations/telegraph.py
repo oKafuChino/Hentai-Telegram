@@ -446,10 +446,10 @@ class TelegraphClient:
         clean_sid = raw_sid[2:] if raw_sid.upper().startswith("JM") else raw_sid
         nodes: list[dict[str, Any]] = [
             {"tag": "h3", "children": [manga_title]},
-            {"tag": "p", "children": ["📖 来源: JMComic"]},
             {"tag": "p", "children": [f"📝 作者: {', '.join(authors) if authors else '未知'}"]},
             {"tag": "p", "children": [f"🏷 标签: {', '.join(tags) if tags else '无'}"]},
             {"tag": "p", "children": [f"🆔 漫画ID: JM{clean_sid}"]},
+            {"tag": "p", "children": ["📖 来源: JMComic"]},
         ]
         nodes.append({"tag": "hr"})
         nodes.append({"tag": "h4", "children": ["📖 章节列表"]})

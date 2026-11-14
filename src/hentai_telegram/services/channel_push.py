@@ -3,7 +3,6 @@ from html import escape
 from pathlib import Path
 
 from aiogram import Bot
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from hentai_telegram.domain.models import Manga
 
@@ -75,10 +74,10 @@ class ChannelPublisher:
 
         caption_lines = [
             f"📚 <b>{title_text}</b>",
-            f"📖 来源:{escape(source_name)}",
             f"📝 作者：{authors_text}",
             f"🏷 标签：{tags_text}",
             f"🆔 漫画 ID：<code>JM{source_id_text}</code>",
+            f"📖 来源:{escape(source_name)}",
         ]
 
         # Chapter links in text (for multi-chapter manga)
@@ -126,26 +125,6 @@ class ChannelPublisher:
 
         caption = "\n".join(safe_lines)
 
-        # Inline Keyboard
-        buttons: list[list[InlineKeyboardButton]] = []
-        if len(chapters) == 1:
-            url = chapters[0].get("telegraph_url") or "#"
-            buttons.append([InlineKeyboardButton(text="📖 点击在线阅读", url=url)])
-        else:
-            if manga.index_url:
-                buttons.append([InlineKeyboardButton(text="📑 查看全本目录", url=manga.index_url)])
-            row: list[InlineKeyboardButton] = []
-            for ch in chapters[:8]:
-                url = ch.get("telegraph_url") or "#"
-                row.append(InlineKeyboardButton(text=f"第 {ch['ordinal']} 话", url=url))
-                if len(row) == 2:
-                    buttons.append(row)
-                    row = []
-            if row:
-                buttons.append(row)
-
-        reply_markup = InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None
-
         # Determine primary Telegraph URL to generate Instant View card
         preview_url = None
         if chapters and chapters[0].get("telegraph_url"):
@@ -166,7 +145,6 @@ class ChannelPublisher:
                 msg = await self.bot.send_message(
                     chat_id=target,
                     text=caption,
-                    reply_markup=reply_markup,
                     parse_mode="HTML",
                     link_preview_options=link_preview_options,
                 )
