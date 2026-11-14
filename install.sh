@@ -38,6 +38,8 @@ done
 "${SUDO[@]}" docker compose run --rm app check-config
 echo '检查 Telegram 频道权限...'
 "${SUDO[@]}" docker compose run --rm app check-channel || true
+echo '检查 R2 / B2 对象存储连接...'
+"${SUDO[@]}" docker compose run --rm app check-storage || true
 
 "${SUDO[@]}" docker compose up -d app
 "${SUDO[@]}" docker compose ps

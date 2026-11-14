@@ -25,6 +25,7 @@ class TelegraphClient:
         author_url: str = "",
         token_file: Path | None = None,
         catbox_userhash: str = "",
+        s3_client: Any | None = None,
     ):
         self.api_url = api_url.rstrip("/")
         self.upload_url = upload_url.strip() or "https://catbox.moe/user/api.php"
@@ -33,6 +34,7 @@ class TelegraphClient:
         self.author_url = author_url
         self.token_file = token_file
         self.catbox_userhash = catbox_userhash.strip()
+        self.s3_client = s3_client
 
     async def ensure_token(self, session: aiohttp.ClientSession) -> str:
         if self.access_token:
@@ -64,17 +66,31 @@ class TelegraphClient:
 
         return self.access_token
 
-    async def upload_image(self, session: aiohttp.ClientSession, image_path: Path) -> str:
-        """Upload a single local image to image hosting service and return the hosted URL.
+    async def upload_image(
+        self,
+        session: aiohttp.ClientSession,
+        image_path: Path,
+        key: str | None = None,
+    ) -> str:
+        """Upload a single local image to storage and return the public URL.
 
-        Supports:
-        1. Catbox API (https://catbox.moe/user/api.php)
-        2. Telegraph-compatible image upload proxies (returning [{"src": "..."}])
-        3. Automatic fallback to Catbox if a custom upload proxy fails.
+        Priority:
+        1. Cloudflare R2 / Backblaze B2 S3 storage (if configured)
+        2. Catbox API (https://catbox.moe/user/api.php)
+        3. Custom Telegraph-compatible image upload proxy
         """
         if not image_path.is_file():
             raise TelegraphError(f"图片不存在: {image_path.name}", retryable=False)
 
+        # 1. Cloudflare R2 / Backblaze B2 S3 Object Storage
+        if self.s3_client and self.s3_client.is_configured():
+            try:
+                return await self.s3_client.upload_file(image_path, object_key=key)
+            except Exception as exc:
+                logger.error("s3_upload_failed key=%s error=%s", key, exc)
+                raise TelegraphError(f"R2/B2 对象存储上传失败: {exc}") from exc
+
+        # 2. HTTP upload (Catbox / Custom proxy)
         target_url = self.upload_url.strip()
         # telegra.ph/upload is permanently discontinued by Telegram; automatically use Catbox
         if not target_url or target_url.rstrip("/") == "https://telegra.ph/upload":

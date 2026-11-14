@@ -77,6 +77,15 @@ def main():
             raise ValueError("用户 ID 格式无效，必须为纯数字")
         values["TELEGRAM_CHANNEL_ID"] = ask("发布目标 Telegram 频道 ID 或 @用户名（例如 -1001234567890）")
         values["TELEGRAPH_AUTHOR_NAME"] = ask("Telegraph 文章作者名", "Hentai-Telegram")
+
+        use_s3 = ask("是否配置 Cloudflare R2 / Backblaze B2 等 S3 兼容对象存储？(y/n)", "y").lower() in {"y", "yes"}
+        if use_s3:
+            values["S3_ENDPOINT_URL"] = ask("S3 / R2 / B2 Endpoint 地址（例如 https://<account_id>.r2.cloudflarestorage.com）")
+            values["S3_BUCKET_NAME"] = ask("存储桶名称 (Bucket Name)")
+            values["S3_ACCESS_KEY_ID"] = ask("Access Key ID (KeyID)", secret=True)
+            values["S3_SECRET_ACCESS_KEY"] = ask("Secret Access Key (ApplicationKey)", secret=True)
+            values["S3_PUBLIC_URL"] = ask("图片公开访问域名（例如 https://img.example.com 或 https://pub-xxx.r2.dev）")
+            values["S3_REGION_NAME"] = ask("S3 Region 区域（R2 填 auto，B2 填对应地区如 us-west-004）", "auto")
     else:
         raise ValueError(f"Unknown action: {action}")
     save(values)

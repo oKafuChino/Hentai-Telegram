@@ -17,12 +17,12 @@ if [ "$(id -u)" = "0" ]; then
     chown -R app:app /app-data /storage 2>/dev/null || true
     chmod -R u+rwX /app-data /storage 2>/dev/null || true
 
-    if [ "$1" = "run" ] || [ "$1" = "check-config" ] || [ "$1" = "check-channel" ] || [ "$1" = "check-source" ] || [ "$1" = "health" ] || [ "$1" = "backup" ] || [ "${1#-}" != "$1" ]; then
+    if [ "$1" = "run" ] || [ "$1" = "check-config" ] || [ "$1" = "check-channel" ] || [ "$1" = "check-storage" ] || [ "$1" = "check-source" ] || [ "$1" = "health" ] || [ "$1" = "backup" ] || [ "${1#-}" != "$1" ]; then
         set -- python -m hentai_telegram.main "$@"
     fi
     exec gosu app "$@"
 else
-    if [ "$1" = "run" ] || [ "$1" = "check-config" ] || [ "$1" = "check-channel" ] || [ "$1" = "check-source" ] || [ "$1" = "health" ] || [ "$1" = "backup" ] || [ "${1#-}" != "$1" ]; then
+    if [ "$1" = "run" ] || [ "$1" = "check-config" ] || [ "$1" = "check-channel" ] || [ "$1" = "check-storage" ] || [ "$1" = "check-source" ] || [ "$1" = "health" ] || [ "$1" = "backup" ] || [ "${1#-}" != "$1" ]; then
         set -- python -m hentai_telegram.main "$@"
     fi
     exec "$@"

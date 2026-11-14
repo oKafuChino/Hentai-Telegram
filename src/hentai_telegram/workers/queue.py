@@ -208,12 +208,12 @@ class Worker:
                     if p1_candidates:
                         shutil.copy2(p1_candidates[0], cover_path)
 
-                # Upload chapter images to Telegraph
+                # Upload chapter images
                 self.store.update(
                     task_id,
                     status="UPLOADING",
                     phase="upload",
-                    progress=f"章节 {chapter.ordinal}/{len(records)}: 正在上传至 Telegraph (0/{len(pages)})",
+                    progress=f"章节 {chapter.ordinal}/{len(records)}: 正在上传图片 (0/{len(pages)})",
                 )
 
                 image_urls: list[str] = []
@@ -223,13 +223,23 @@ class Worker:
                     if len(candidates) != 1:
                         raise JobError("BAD_IMAGE", f"缺少图片 {p.number}")
                     img_file = candidates[0]
-                    img_url = await self.telegraph.upload_image(http_session, img_file)
+
+                    s3_key = None
+                    if self.telegraph.s3_client and self.telegraph.s3_client.is_configured():
+                        s3_key = self.telegraph.s3_client.build_key(
+                            manga.source_id,
+                            chapter.ordinal,
+                            p.number,
+                            img_file.suffix,
+                        )
+
+                    img_url = await self.telegraph.upload_image(http_session, img_file, key=s3_key)
                     image_urls.append(img_url)
                     # Clean up local image file right after upload
                     img_file.unlink(missing_ok=True)
                     self.store.update(
                         task_id,
-                        progress=f"章节 {chapter.ordinal}/{len(records)}: 正在上传 Telegraph ({p.number}/{len(pages)})",
+                        progress=f"章节 {chapter.ordinal}/{len(records)}: 正在上传图片 ({p.number}/{len(pages)})",
                     )
 
                 # Create Telegraph page for this chapter

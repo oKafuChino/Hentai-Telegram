@@ -28,6 +28,20 @@ async def run(settings: Settings, db_path, recent_logs):
     provider = provider_type(settings.provider_command, settings.operation_timeout)
 
     store = Store(db_path)
+
+    s3_client = None
+    if settings.s3_endpoint_url and settings.s3_bucket_name:
+        from hentai_telegram.storage.s3 import S3StorageClient
+        s3_client = S3StorageClient(
+            endpoint_url=settings.s3_endpoint_url,
+            bucket_name=settings.s3_bucket_name,
+            access_key_id=settings.s3_access_key_id,
+            secret_access_key=settings.s3_secret_access_key,
+            public_url=settings.s3_public_url,
+            region_name=settings.s3_region_name,
+            key_prefix=settings.s3_key_prefix,
+        )
+
     telegraph = TelegraphClient(
         api_url=settings.telegraph_api_url,
         upload_url=settings.telegraph_upload_url,
@@ -36,6 +50,7 @@ async def run(settings: Settings, db_path, recent_logs):
         author_url=settings.telegraph_author_url,
         token_file=db_path.parent / "telegraph_token.txt",
         catbox_userhash=settings.catbox_userhash,
+        s3_client=s3_client,
     )
 
     bot = Bot(settings.telegram_bot_token)
@@ -86,7 +101,7 @@ def main():
     parser = argparse.ArgumentParser(description="Hentai-Telegram: Manga to Telegraph Channel Uploader")
     parser.add_argument(
         "command",
-        choices=["run", "check-config", "check-channel", "check-source", "health", "backup"],
+        choices=["run", "check-config", "check-channel", "check-storage", "check-source", "health", "backup"],
         nargs="?",
         default="run",
     )
@@ -123,8 +138,38 @@ def main():
             print(f"• Allowed Admin IDs: {list(settings.allowed_user_ids)}")
             print(f"• Target Channel: {settings.telegram_channel_id or '(Not specified)'}")
             print(f"• Telegraph API: {settings.telegraph_api_url}")
-            print(f"• Telegraph Upload: {settings.telegraph_upload_url}")
+            if settings.s3_endpoint_url and settings.s3_bucket_name:
+                print(f"• Image Storage: R2/B2 S3 (Bucket: {settings.s3_bucket_name}, Endpoint: {settings.s3_endpoint_url})")
+                print(f"• Public Image URL: {settings.s3_public_url or f'{settings.s3_endpoint_url}/{settings.s3_bucket_name}'}")
+                print(f"• S3 Key Prefix: {settings.s3_key_prefix}")
+            else:
+                print(f"• Image Storage: HTTP/Catbox ({settings.telegraph_upload_url})")
             print(f"• Storage Root: {settings.storage_root}")
+            return
+
+        if args.command == "check-storage":
+            if not settings.s3_endpoint_url or not settings.s3_bucket_name:
+                print("未配置 S3 / R2 / B2 对象存储（当前使用默认图床 Catbox）")
+                return
+            from hentai_telegram.storage.s3 import S3StorageClient, S3StorageError
+            s3 = S3StorageClient(
+                endpoint_url=settings.s3_endpoint_url,
+                bucket_name=settings.s3_bucket_name,
+                access_key_id=settings.s3_access_key_id,
+                secret_access_key=settings.s3_secret_access_key,
+                public_url=settings.s3_public_url,
+                region_name=settings.s3_region_name,
+                key_prefix=settings.s3_key_prefix,
+            )
+            try:
+                info = s3.verify_bucket()
+                print("R2/B2 对象存储连接与鉴权测试成功！")
+                print(f"• Endpoint: {info['endpoint']}")
+                print(f"• Bucket: {info['bucket']}")
+                print(f"• Region: {info['region']}")
+                print(f"• Public URL: {info['public_url']}")
+            except S3StorageError as exc:
+                parser.exit(2, f"R2/B2 存储桶测试失败: {exc}\n")
             return
 
         if args.command == "check-channel":

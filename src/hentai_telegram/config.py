@@ -36,6 +36,13 @@ class Settings:
     telegraph_author_name: str = "Hentai-Telegram"
     telegraph_author_url: str = ""
     catbox_userhash: str = field(default="", repr=False)
+    s3_endpoint_url: str = ""
+    s3_bucket_name: str = ""
+    s3_access_key_id: str = field(default="", repr=False)
+    s3_secret_access_key: str = field(default="", repr=False)
+    s3_public_url: str = ""
+    s3_region_name: str = "auto"
+    s3_key_prefix: str = "manga/"
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -64,6 +71,48 @@ class Settings:
         else:
             upload_url = raw_upload
 
+        s3_endpoint = (
+            os.getenv("S3_ENDPOINT_URL")
+            or os.getenv("R2_ENDPOINT_URL")
+            or os.getenv("B2_ENDPOINT_URL")
+            or ""
+        ).strip()
+        s3_bucket = (
+            os.getenv("S3_BUCKET_NAME")
+            or os.getenv("R2_BUCKET_NAME")
+            or os.getenv("B2_BUCKET_NAME")
+            or ""
+        ).strip()
+        s3_key_id = (
+            os.getenv("S3_ACCESS_KEY_ID")
+            or os.getenv("R2_ACCESS_KEY_ID")
+            or os.getenv("B2_KEY_ID")
+            or ""
+        ).strip()
+        s3_secret = (
+            os.getenv("S3_SECRET_ACCESS_KEY")
+            or os.getenv("R2_SECRET_ACCESS_KEY")
+            or os.getenv("B2_APPLICATION_KEY")
+            or ""
+        ).strip()
+        s3_public = (
+            os.getenv("S3_PUBLIC_URL")
+            or os.getenv("R2_PUBLIC_URL")
+            or os.getenv("B2_PUBLIC_URL")
+            or ""
+        ).strip()
+        s3_region = (
+            os.getenv("S3_REGION_NAME")
+            or os.getenv("R2_REGION_NAME")
+            or os.getenv("B2_REGION_NAME")
+            or "auto"
+        ).strip() or "auto"
+        s3_prefix = (
+            os.getenv("S3_KEY_PREFIX")
+            or os.getenv("R2_KEY_PREFIX")
+            or "manga/"
+        ).strip()
+
         return cls(
             telegram_bot_token=token,
             allowed_user_ids=allowed,
@@ -88,6 +137,13 @@ class Settings:
             telegraph_author_name=os.getenv("TELEGRAPH_AUTHOR_NAME", "Hentai-Telegram").strip(),
             telegraph_author_url=os.getenv("TELEGRAPH_AUTHOR_URL", "").strip(),
             catbox_userhash=os.getenv("CATBOX_USERHASH", "").strip(),
+            s3_endpoint_url=s3_endpoint,
+            s3_bucket_name=s3_bucket,
+            s3_access_key_id=s3_key_id,
+            s3_secret_access_key=s3_secret,
+            s3_public_url=s3_public,
+            s3_region_name=s3_region,
+            s3_key_prefix=s3_prefix,
         )
 
     def __post_init__(self):
