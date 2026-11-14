@@ -1,2 +1,0 @@
-# Compatibility overlay for old deployment commands. Agent API is now in compose.yaml.
-services: {}

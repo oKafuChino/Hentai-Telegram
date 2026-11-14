@@ -1,1 +1,0 @@
-"""Komga Plus application package."""

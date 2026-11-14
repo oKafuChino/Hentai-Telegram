@@ -1,1 +1,0 @@
-"""Komga client package."""

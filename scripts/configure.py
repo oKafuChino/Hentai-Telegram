@@ -49,7 +49,7 @@ def save(values):
 
 
 def ask(label, default="", secret=False):
-    prompt = label + ("（留空保留）" if default else "") + ": "
+    prompt = label + (f"（默认: {default}）" if default else "") + ": "
     value = getpass.getpass(prompt) if secret else input(prompt).strip()
     value = value or default
     if not value:
@@ -59,7 +59,7 @@ def ask(label, default="", secret=False):
 
 
 def main():
-    action = sys.argv[1]
+    action = sys.argv[1] if len(sys.argv) > 1 else "initial"
     values = parse((ENV if ENV.exists() else ROOT / ".env.example").read_text(encoding="utf-8"))
     if action == "ids":
         uid, gid = values.get("APP_UID", "1000"), values.get("APP_GID", "1000")
@@ -69,22 +69,16 @@ def main():
         return
     if action == "initial":
         if ENV.exists():
-            print("检测到现有 .env，保留 Token、部署版本和其他配置。")
+            print("检测到现有 .env，保留 Token 及其他已有配置。")
             return
         values["TELEGRAM_BOT_TOKEN"] = ask("Telegram Bot Token", secret=True)
-        values["TELEGRAM_ALLOWED_USER_IDS"] = ask("管理员 Telegram 数字用户 ID，逗号分隔；普通用户在 Bot 注册")
+        values["TELEGRAM_ALLOWED_USER_IDS"] = ask("管理员 Telegram 数字用户 ID（逗号分隔）")
         if not re.fullmatch(r"[1-9][0-9]*(,[1-9][0-9]*)*", values["TELEGRAM_ALLOWED_USER_IDS"]):
-            raise ValueError("用户 ID 格式无效")
-        values["KOMGA_IMAGE"] = "gotson/komga:latest"
-        values["KOMGA_PUBLIC_URL"] = ask("Komga 阅读入口", "http://localhost:25600")
-    elif action == "komga":
-        values["KOMGA_BASE_URL"] = ask("Komga 容器访问地址", values.get("KOMGA_BASE_URL") or "http://komga:25600")
-        values["KOMGA_USERNAME"] = ask("Komga 管理员邮箱", values.get("KOMGA_USERNAME", ""))
-        values["KOMGA_PASSWORD"] = ask("Komga 管理员密码", values.get("KOMGA_PASSWORD", ""), True)
-        old = values.get("KOMGA_LIBRARY_ID", "")
-        values["KOMGA_LIBRARY_ID"] = ask("Komga library ID（漫画库页面 URL 中的 ID）", "" if old.startswith("replace") else old)
+            raise ValueError("用户 ID 格式无效，必须为纯数字")
+        values["TELEGRAM_CHANNEL_ID"] = ask("发布目标 Telegram 频道 ID 或 @用户名（例如 -1001234567890）")
+        values["TELEGRAPH_AUTHOR_NAME"] = ask("Telegraph 文章作者名", "Hentai-Telegram")
     else:
-        raise ValueError("Unknown action")
+        raise ValueError(f"Unknown action: {action}")
     save(values)
 
 

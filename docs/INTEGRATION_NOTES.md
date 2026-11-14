@@ -4,7 +4,7 @@
 
 ## 最新实现（2026-10-10）
 
-新增内置 `jmemby.providers.jm_adapter` 和 `jmemby.integrations.komga.adapter`。以下早期“未实现”记录保留为历史；当前不再需要用户提供外部适配器。
+新增内置 `hentai_telegram.providers.jm_adapter` 和 `hentai_telegram.integrations.komga.adapter`。以下早期“未实现”记录保留为历史；当前不再需要用户提供外部适配器。
 
 JMComic 采用用户指定项目 https://github.com/hect0x7/JMComic-Crawler-Python ，依赖范围暂为 `jmcomic>=2.5,<3`。调用 JmOption.construct/new_jm_client、get_album_detail、get_photo_detail、download_by_image_detail；保存稳定章节 ID/页索引并在重试时解析图片地址，SDK 负责图片还原。**这些接口依据兼容实现编写，本轮未能下载源码或安装 SDK 核实，不属于上游验证结果。** SDK 下载后执行大小检查，未实现严格流式限额。
 

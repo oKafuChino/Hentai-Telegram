@@ -27,34 +27,23 @@ if ! "${SUDO[@]}" docker info >/dev/null 2>&1; then
 fi
 python3 scripts/configure.py initial
 "${SUDO[@]}" docker compose config --quiet
-# Create only our owned data directories. Never recursively chown existing data.
+
 read -r APP_UID APP_GID < <(python3 scripts/configure.py ids)
-for directory in data data/app data/komga data/storage data/storage/library data/storage/staging; do
+for directory in data data/app data/storage; do
   if [[ ! -e "$directory" ]]; then
     "${SUDO[@]}" install -d -m 750 -o "$APP_UID" -g "$APP_GID" "$directory"
   fi
 done
-"${SUDO[@]}" docker compose up -d komga
-echo 'Komga 已启动。首次使用请在另一个终端建立隧道：'
-echo '  ssh -L 25600:127.0.0.1:25600 用户名@VPS地址'
-echo '浏览器打开 http://localhost:25600，创建管理员账户和根目录为 /data 的漫画库。'
-echo '已有账户/漫画库无需重新创建。等待界面可访问后继续。'
-read -r -p '按 Enter 填写 Komga 凭据和漫画库 ID：' _
-python3 scripts/configure.py komga
-"${SUDO[@]}" docker compose config --quiet
+
 "${SUDO[@]}" docker compose build app
 "${SUDO[@]}" docker compose run --rm app check-config
-until "${SUDO[@]}" docker compose run --rm app check-integrations; do
-  echo 'Komga 检查失败，具体原因见上方错误代码。配置和数据已保留。'
-  echo '可另开终端查看：sudo docker compose logs --tail 100 komga'
-  read -r -p '输入 e 修改配置、r 等待服务就绪后重试，其他输入退出：' retry_action
-  case "$retry_action" in
-    e|E) python3 scripts/configure.py komga; "${SUDO[@]}" docker compose config --quiet ;;
-    r|R) ;;
-    *) exit 1 ;;
-  esac
-done
+echo '检查 Telegram 频道权限...'
+"${SUDO[@]}" docker compose run --rm app check-channel || true
+
 "${SUDO[@]}" docker compose up -d app
 "${SUDO[@]}" docker compose ps
-echo 'Komga Plus 部署命令已完成。请用 Telegram 提交一个小漫画验收真实下载和入库。'
-echo '排查日志：sudo docker compose logs --tail 100 app'
+echo '=================================================='
+echo 'Hentai-Telegram 服务已成功启动！'
+echo '请使用管理员账号在 Telegram 中私聊机器人发送 /start 开始使用。'
+echo '查看运行日志：sudo docker compose logs -f app'
+echo '=================================================='

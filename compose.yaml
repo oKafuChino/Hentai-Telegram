@@ -7,15 +7,8 @@ services:
         APP_GID: ${APP_GID:-1000}
     env_file: .env
     environment:
-      DATABASE_URL: sqlite+aiosqlite:////app-data/jmemby.db
+      DATABASE_URL: sqlite+aiosqlite:////app-data/hentai_telegram.db
       STORAGE_ROOT: /storage
-      WEB_HOST: 0.0.0.0
-      WEB_PORT: 8080
-      DISTRIBUTED_HOST: 0.0.0.0
-      DISTRIBUTED_PORT: 8081
-    ports:
-      - 127.0.0.1:${WEB_PORT:-8080}:8080
-      - 127.0.0.1:${DISTRIBUTED_PORT:-8081}:8081
     volumes:
       - ./data/app:/app-data
       - ./data/storage:/storage
@@ -25,26 +18,10 @@ services:
     mem_limit: 1g
     cpus: 1.0
     healthcheck:
-      test: [CMD, python, -m, jmemby.main, health]
+      test: [CMD, python, -m, hentai_telegram.main, health]
       interval: 30s
       timeout: 5s
       retries: 3
-    logging:
-      driver: json-file
-      options:
-        max-size: 10m
-        max-file: "3"
-  komga:
-    image: ${KOMGA_IMAGE:-gotson/komga:latest}
-    pull_policy: always
-    user: ${APP_UID:-1000}:${APP_GID:-1000}
-    volumes:
-      - ./data/komga:/config
-      - ./data/storage/library:/data:ro
-    ports:
-      - 127.0.0.1:25600:25600
-    restart: unless-stopped
-    mem_limit: 2g
     logging:
       driver: json-file
       options:

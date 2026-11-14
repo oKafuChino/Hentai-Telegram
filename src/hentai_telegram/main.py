@@ -1,0 +1,169 @@
+import argparse
+import asyncio
+import logging
+import os
+import time
+
+from hentai_telegram.config import Settings
+from hentai_telegram.db.store import Store
+from hentai_telegram.domain.errors import JobError
+from hentai_telegram.integrations.telegraph import TelegraphClient
+from hentai_telegram.providers.builtin import JmProvider
+from hentai_telegram.providers.command import CommandProvider
+from hentai_telegram.runtime import JsonFormatter, backup_database, database_path, instance_lock
+from hentai_telegram.services.channel_push import ChannelPublisher
+from hentai_telegram.services.diagnostics import Diagnostics, RecentLogs
+from hentai_telegram.services.tasks import TaskService
+from hentai_telegram.services.users import UserService
+from hentai_telegram.workers.queue import Worker
+
+logger = logging.getLogger(__name__)
+
+
+async def run(settings: Settings, db_path, recent_logs):
+    from aiogram import Bot
+    from hentai_telegram.bot.app import create_dispatcher, progress_updater
+
+    provider_type = CommandProvider if os.getenv("PROVIDER_COMMAND") else JmProvider
+    provider = provider_type(settings.provider_command, settings.operation_timeout)
+
+    store = Store(db_path)
+    telegraph = TelegraphClient(
+        api_url=settings.telegraph_api_url,
+        upload_url=settings.telegraph_upload_url,
+        access_token=settings.telegraph_access_token,
+        author_name=settings.telegraph_author_name,
+        author_url=settings.telegraph_author_url,
+        token_file=db_path.parent / "telegraph_token.txt",
+    )
+
+    bot = Bot(settings.telegram_bot_token)
+    publisher = ChannelPublisher(bot, settings.telegram_channel_id)
+    worker = Worker(store, provider, telegraph, publisher, settings)
+    users = UserService(settings.allowed_user_ids)
+    task_service = TaskService(store, provider, settings.provider_domains, settings.allowed_user_ids)
+    diagnostics = Diagnostics(users, worker, recent_logs, publisher)
+
+    dispatcher = create_dispatcher(
+        service=task_service,
+        diagnostics=diagnostics,
+        publisher=publisher,
+        allowed_user_ids=settings.allowed_user_ids,
+        channel_id=settings.telegram_channel_id,
+    )
+
+    heartbeat = db_path.parent / "heartbeat"
+
+    async def health():
+        while True:
+            if time.monotonic() - worker.heartbeat < 30:
+                heartbeat.write_text(str(time.time()))
+            await asyncio.sleep(5)
+
+    jobs = [
+        asyncio.create_task(worker.run()),
+        asyncio.create_task(progress_updater(bot, store, settings.telegram_channel_id)),
+        asyncio.create_task(health()),
+        asyncio.create_task(dispatcher.start_polling(bot)),
+    ]
+
+    try:
+        logger.info("hentai_telegram_started channel=%s", settings.telegram_channel_id)
+        done, _ = await asyncio.wait(jobs, return_when=asyncio.FIRST_COMPLETED)
+        for job in done:
+            job.result()
+    finally:
+        for job in jobs:
+            job.cancel()
+        await asyncio.gather(*jobs, return_exceptions=True)
+        await bot.session.close()
+        store.close()
+        heartbeat.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Hentai-Telegram: Manga to Telegraph Channel Uploader")
+    parser.add_argument(
+        "command",
+        choices=["run", "check-config", "check-channel", "check-source", "health", "backup"],
+        nargs="?",
+        default="run",
+    )
+    parser.add_argument("--destination")
+    parser.add_argument("--manga-id")
+    args = parser.parse_args()
+
+    db_path = database_path(os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./data/app/hentai_telegram.db"))
+
+    if args.command == "health":
+        try:
+            alive = time.time() - float((db_path.parent / "heartbeat").read_text()) < 60
+        except (OSError, ValueError):
+            alive = False
+        raise SystemExit(0 if alive else 1)
+
+    if args.command == "backup":
+        if not args.destination:
+            parser.error("--destination is required")
+        backup_database(db_path, args.destination)
+        print(f"Database backed up to {args.destination}")
+        return
+
+    handler = logging.StreamHandler()
+    handler.setFormatter(JsonFormatter())
+    recent_logs = RecentLogs()
+    logging.basicConfig(handlers=[handler, recent_logs], level=logging.INFO)
+
+    try:
+        settings = Settings.from_env()
+
+        if args.command == "check-config":
+            print("Configuration valid:")
+            print(f"• Allowed Admin IDs: {list(settings.allowed_user_ids)}")
+            print(f"• Target Channel: {settings.telegram_channel_id or '(Not specified)'}")
+            print(f"• Telegraph API: {settings.telegraph_api_url}")
+            print(f"• Telegraph Upload: {settings.telegraph_upload_url}")
+            print(f"• Storage Root: {settings.storage_root}")
+            return
+
+        if args.command == "check-channel":
+            from aiogram import Bot
+
+            async def test_ch():
+                bot = Bot(settings.telegram_bot_token)
+                try:
+                    pub = ChannelPublisher(bot, settings.telegram_channel_id)
+                    info = await pub.verify_channel()
+                    print(f"Channel verified successfully: {info}")
+                finally:
+                    await bot.session.close()
+
+            asyncio.run(test_ch())
+            return
+
+        if args.command == "check-source":
+            from hentai_telegram.providers.reference import parse_reference
+
+            if not args.manga_id:
+                parser.error("check-source requires --manga-id")
+            source_id = parse_reference(args.manga_id)
+            provider = (
+                CommandProvider(settings.provider_command, settings.operation_timeout)
+                if os.getenv("PROVIDER_COMMAND")
+                else JmProvider(settings.provider_command, settings.operation_timeout)
+            )
+            manga = asyncio.run(provider.get_manga(source_id))
+            print(f"数据源元数据查询成功: 《{manga.title}》 共 {len(manga.chapters)} 个章节。")
+            return
+
+        with instance_lock(db_path.parent / "instance.lock"):
+            asyncio.run(run(settings, db_path, recent_logs))
+
+    except JobError as exc:
+        parser.exit(2, f"检查失败 [{exc.code}]：{exc}\n")
+    except (ValueError, RuntimeError) as exc:
+        parser.exit(2, f"Startup failed: {exc}\n")
+
+
+if __name__ == "__main__":
+    main()

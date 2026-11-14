@@ -48,7 +48,7 @@ docker compose logs --tail 100 app
 应用数据库使用 SQLite 在线备份，目标文件必须不存在：
 
 ```sh
-docker compose exec app python -m jmemby.main backup --destination /app-data/backup-2026-10-10.db
+docker compose exec app python -m hentai_telegram.main backup --destination /app-data/backup-2026-10-10.db
 ```
 
 将备份文件复制至异地存储。Komga 配置与数据库在停机后做一致性备份；漫画库按容量预算单独备份。真实凭据备份应加密。

@@ -1,13 +1,12 @@
 [project]
-name = "jmemby"
-version = "0.1.0"
-description = "Komga Plus: Telegram and web-managed manga downloads for Komga"
+name = "hentai-telegram"
+version = "1.0.0"
+description = "Hentai-Telegram: Telegram Manga to Telegraph Channel Uploader Bot"
 requires-python = ">=3.12"
 dependencies = [
   "aiohttp>=3.10,<4",
-  "cryptography>=44,<51",
   "aiogram>=3.13,<4",
-  "Pillow>=12,<13",
+  "Pillow>=10,<13",
   "jmcomic>=2.5,<3",
   "requests>=2.32,<3",
 ]
@@ -20,7 +19,8 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [project.scripts]
-jmemby = "jmemby.main:main"
+hentai-telegram = "hentai_telegram.main:main"
+hentai_telegram = "hentai_telegram.main:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9", "ruff>=0.6,<1"]

@@ -8,5 +8,5 @@ COPY src ./src
 RUN pip install --no-cache-dir .
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 USER app
-ENTRYPOINT ["python", "-m", "jmemby.main"]
+ENTRYPOINT ["python", "-m", "hentai_telegram.main"]
 CMD ["run"]
