@@ -131,3 +131,32 @@ class R2StorageClient:
         ordered_urls = [completed_map[fn] for fn, _ in slices]
         logger.info(f"✅ R2 全部切片并发上传完成，生成 {len(ordered_urls)} 个直链")
         return ordered_urls
+
+    def delete_manga_objects(self, manga_id: str) -> int:
+        """Delete all objects of a manga from R2."""
+        if not self.is_configured():
+            return 0
+        deleted_count = 0
+        clean_id = str(manga_id).strip()
+        prefixes = [
+            f"manga_{clean_id}/",
+            f"manga/{clean_id}/",
+        ]
+        for prefix in prefixes:
+            try:
+                paginator = self.s3.get_paginator("list_objects_v2")
+                for page in paginator.paginate(Bucket=self.bucket, Prefix=prefix):
+                    contents = page.get("Contents", [])
+                    if not contents:
+                        continue
+                    objects = [{"Key": item["Key"]} for item in contents]
+                    for i in range(0, len(objects), 1000):
+                        chunk = objects[i : i + 1000]
+                        res = self.s3.delete_objects(
+                            Bucket=self.bucket,
+                            Delete={"Objects": chunk},
+                        )
+                        deleted_count += len(res.get("Deleted", []))
+            except Exception as exc:
+                logger.warning(f"R2 删除对象异常 prefix={prefix}: {exc}")
+        return deleted_count

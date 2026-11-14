@@ -258,6 +258,78 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(preview_opt.prefer_large_media)
         self.assertTrue(preview_opt.show_above_text)
 
+    async def test_task_service_delete_unauthorized(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        with self.assertRaises(ValueError) as ctx:
+            await svc.delete("12345", 9999)
+        self.assertIn("仅管理员可用", str(ctx.exception))
+
+    async def test_task_service_delete_invalid_reference(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        with self.assertRaises(ValueError) as ctx:
+            await svc.delete("invalid_ref_without_id", 1001)
+        self.assertIn("只支持数字漫画 ID", str(ctx.exception))
+
+    async def test_task_service_delete_full_flow(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        task = await svc.download("12345", 1001, 1001)
+
+        # Set task channel_message_id in db
+        self.store.update(task["id"], channel_message_id=666)
+
+        # Create dummy staging folder
+        storage_root = self.root / "storage"
+        task_staging = storage_root / "staging" / f"task_{task['id']}"
+        task_staging.mkdir(parents=True, exist_ok=True)
+        (task_staging / "dummy.png").write_bytes(b"data")
+
+        # Mock bot and s3_client
+        mock_bot = AsyncMock()
+        mock_s3 = MagicMock()
+        mock_s3.is_configured.return_value = True
+        mock_s3.delete_manga_objects = AsyncMock(return_value=12)
+
+        res = await svc.delete(
+            reference="12345",
+            user_id=1001,
+            bot=mock_bot,
+            channel_id="-1009999999",
+            s3_client=mock_s3,
+            storage_root=storage_root,
+        )
+
+        self.assertEqual(res["source_id"], "12345")
+        self.assertEqual(res["title"], "测试漫画标题")
+        self.assertTrue(res["found_in_db"])
+        self.assertEqual(res["deleted_channel_msgs"], 1)
+        self.assertEqual(res["deleted_r2_count"], 12)
+        self.assertEqual(res["deleted_tasks"], 1)
+        self.assertEqual(res["deleted_chapters"], 2)
+        self.assertEqual(res["deleted_local_files"], 1)
+
+        mock_bot.delete_message.assert_called_once_with(chat_id=-1009999999, message_id=666)
+        mock_s3.delete_manga_objects.assert_called_once_with("12345")
+        self.assertFalse(task_staging.exists())
+        self.assertIsNone(self.store.get_manga("jmcomic", "12345"))
+
+    async def test_task_service_delete_channel_delete_exception_handled(self):
+        svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
+        task = await svc.download("77777", 1001, 1001)
+        self.store.update(task["id"], channel_message_id=999)
+
+        mock_bot = AsyncMock()
+        mock_bot.delete_message.side_effect = Exception("Message already deleted")
+
+        res = await svc.delete(
+            reference="JM77777",
+            user_id=1001,
+            bot=mock_bot,
+            channel_id=-1009999999,
+        )
+        self.assertEqual(res["deleted_channel_msgs"], 0)
+        self.assertEqual(res["deleted_tasks"], 1)
+        self.assertIsNone(self.store.get_manga("jmcomic", "77777"))
+
 
 if __name__ == "__main__":
     unittest.main()

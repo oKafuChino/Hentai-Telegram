@@ -322,3 +322,34 @@ class Store:
                 "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
                 (key, value),
             )
+
+    def get_manga(self, source: str, source_id: str) -> dict | None:
+        row = self.connection.execute(
+            "SELECT * FROM manga WHERE source=? AND source_id=?",
+            (source, source_id),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def delete_manga(self, source: str, source_id: str) -> dict | None:
+        """Delete a manga and its chapters and tasks from the database."""
+        with self.transaction() as db:
+            manga_row = db.execute(
+                "SELECT * FROM manga WHERE source=? AND source_id=?",
+                (source, source_id),
+            ).fetchone()
+            if not manga_row:
+                return None
+            manga_data = dict(manga_row)
+            manga_id = manga_data["id"]
+
+            tasks_rows = db.execute("SELECT * FROM tasks WHERE manga_id=?", (manga_id,)).fetchall()
+            manga_data["tasks"] = [dict(r) for r in tasks_rows]
+
+            chapters_rows = db.execute("SELECT * FROM chapters WHERE manga_id=?", (manga_id,)).fetchall()
+            manga_data["chapters"] = [dict(r) for r in chapters_rows]
+
+            db.execute("DELETE FROM tasks WHERE manga_id=?", (manga_id,))
+            db.execute("DELETE FROM chapters WHERE manga_id=?", (manga_id,))
+            db.execute("DELETE FROM manga WHERE id=?", (manga_id,))
+
+            return manga_data

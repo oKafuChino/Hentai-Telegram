@@ -122,3 +122,36 @@ class S3StorageClient:
             object_key = f"{self.key_prefix}{uuid.uuid4().hex[:16]}_{local_path.name}"
 
         return await asyncio.to_thread(self.upload_file_sync, local_path, object_key, content_type)
+
+    def delete_manga_objects_sync(self, source_id: str) -> int:
+        """Synchronously delete all objects associated with a manga source_id."""
+        if not self.is_configured():
+            return 0
+        deleted_count = 0
+        clean_id = str(source_id).strip()
+        prefixes = [
+            f"{self.key_prefix}{clean_id}/",
+            f"manga_{clean_id}/",
+        ]
+        for prefix in prefixes:
+            try:
+                paginator = self.client.get_paginator("list_objects_v2")
+                for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                    contents = page.get("Contents", [])
+                    if not contents:
+                        continue
+                    objects = [{"Key": item["Key"]} for item in contents]
+                    for i in range(0, len(objects), 1000):
+                        chunk = objects[i : i + 1000]
+                        res = self.client.delete_objects(
+                            Bucket=self.bucket_name,
+                            Delete={"Objects": chunk},
+                        )
+                        deleted_count += len(res.get("Deleted", []))
+            except Exception as exc:
+                logger.warning("delete_manga_objects_failed prefix=%s error=%s", prefix, exc)
+        return deleted_count
+
+    async def delete_manga_objects(self, source_id: str) -> int:
+        """Asynchronously delete all objects associated with a manga source_id."""
+        return await asyncio.to_thread(self.delete_manga_objects_sync, source_id)

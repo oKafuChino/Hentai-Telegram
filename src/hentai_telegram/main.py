@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 
 from hentai_telegram.config import Settings
 from hentai_telegram.db.store import Store
@@ -67,6 +68,8 @@ async def run(settings: Settings, db_path, recent_logs):
         publisher=publisher,
         allowed_user_ids=settings.allowed_user_ids,
         channel_id=settings.telegram_channel_id,
+        s3_client=s3_client,
+        storage_root=Path(settings.storage_root),
     )
 
     heartbeat = db_path.parent / "heartbeat"
