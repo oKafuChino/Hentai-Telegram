@@ -16,6 +16,7 @@ from hentai_telegram.domain.models import Manga, Page
 from hentai_telegram.integrations.telegraph import TelegraphClient
 from hentai_telegram.services.channel_push import ChannelPublisher
 from hentai_telegram.storage.cbz import contained, staged_pages, validate_image
+from hentai_telegram.storage.optimizer import optimize_image
 
 logger = logging.getLogger(__name__)
 
@@ -207,7 +208,15 @@ class Worker:
                 if not cover_path.exists():
                     p1_candidates = staged_pages(chapter_stage, 1)
                     if p1_candidates:
-                        shutil.copy2(p1_candidates[0], cover_path)
+                        p1 = p1_candidates[0]
+                        if self.settings.image_optimize_enabled:
+                            p1 = optimize_image(
+                                p1,
+                                max_width=self.settings.image_max_width,
+                                quality=self.settings.image_jpeg_quality,
+                                min_bytes=self.settings.image_min_compress_bytes,
+                            )
+                        shutil.copy2(p1, cover_path)
 
                 # Upload chapter images
                 self.store.update(
@@ -224,6 +233,15 @@ class Worker:
                     if len(candidates) != 1:
                         raise JobError("BAD_IMAGE", f"缺少图片 {p.number}")
                     img_file = candidates[0]
+
+                    # Optimize image before upload if enabled
+                    if self.settings.image_optimize_enabled:
+                        img_file = optimize_image(
+                            img_file,
+                            max_width=self.settings.image_max_width,
+                            quality=self.settings.image_jpeg_quality,
+                            min_bytes=self.settings.image_min_compress_bytes,
+                        )
 
                     s3_key = None
                     if self.telegraph.s3_client and self.telegraph.s3_client.is_configured():

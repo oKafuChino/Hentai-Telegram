@@ -43,6 +43,10 @@ class Settings:
     s3_public_url: str = ""
     s3_region_name: str = "auto"
     s3_key_prefix: str = "manga/"
+    image_optimize_enabled: bool = True
+    image_jpeg_quality: int = 85
+    image_max_width: int = 1600
+    image_min_compress_bytes: int = 100 * 1024
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -113,6 +117,11 @@ class Settings:
             or "manga/"
         ).strip()
 
+        opt_enabled = os.getenv("IMAGE_OPTIMIZE_ENABLED", "true").lower() in {"true", "1", "yes"}
+        jpeg_quality = _int("IMAGE_JPEG_QUALITY", 85)
+        max_width = _int("IMAGE_MAX_WIDTH", 1600)
+        min_bytes = _int("IMAGE_MIN_COMPRESS_BYTES", 100 * 1024)
+
         return cls(
             telegram_bot_token=token,
             allowed_user_ids=allowed,
@@ -144,6 +153,10 @@ class Settings:
             s3_public_url=s3_public,
             s3_region_name=s3_region,
             s3_key_prefix=s3_prefix,
+            image_optimize_enabled=opt_enabled,
+            image_jpeg_quality=max(50, min(jpeg_quality, 95)),
+            image_max_width=max(0, max_width),
+            image_min_compress_bytes=max(0, min_bytes),
         )
 
     def __post_init__(self):

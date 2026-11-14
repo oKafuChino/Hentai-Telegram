@@ -145,6 +145,10 @@ def main():
                 print(f"• S3 Key Prefix: {settings.s3_key_prefix}")
             else:
                 print(f"• Image Storage: HTTP/Catbox ({settings.telegraph_upload_url})")
+            if settings.image_optimize_enabled:
+                print(f"• Image Optimization: Enabled (JPEG Q{settings.image_jpeg_quality}, Max Width: {settings.image_max_width or 'Unlimited'}px)")
+            else:
+                print("• Image Optimization: Disabled")
             print(f"• Storage Root: {settings.storage_root}")
             return
 
