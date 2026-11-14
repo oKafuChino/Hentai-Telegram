@@ -1,0 +1,1 @@
+"""Manga Telegraph Pipeline Package."""

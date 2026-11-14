@@ -143,3 +143,34 @@ python -m hentai_telegram.main run
   ```
 - **重置 Telegraph Token**：
   删除 `data/app/telegraph_token.txt` 后重启服务，Bot 将自动重新注册新的 Telegraph 账号。
+
+
+---
+
+## ⚡ 高并发图像处理与发布流水线 (Manga Telegraph Pipeline)
+
+面向 Telegram 漫画频道的高并发自动化图像处理与发布流水线，严格遵守内存流式处理与零磁盘临时文件原则。
+
+### 🔄 核心处理流程 (Pipeline)
+
+1. **输入层 (`Input`)**：自然数排序扫描原始图片序列（支持 `.jpg`, `.jpeg`, `.png`, `.webp`, `.bmp`）。
+2. **压缩与切片层 (`Compressor`)**：`ProcessPoolExecutor` 多进程流式处理：
+   - **色彩分流**：根据通道均值差自适应识别黑白漫（`8-bit L` 灰度，宽限制 `1280px`，质量 `75`）与彩漫（`RGB`，宽限制 `1440px`，质量 `80`）。
+   - **条漫切片**：高度超过 `2400px` 自动横向切割；尾段不足 `300px` 自动并入上一段，杜绝细碎边角。
+   - **无状态编码**：剥离 EXIF/ICC 元数据，内存中以 `WEBP (method=6)` 编码输出字节流。
+3. **存储层 (`Storage R2`)**：`ThreadPoolExecutor` 并发上传至 Cloudflare R2，附带 1 年长期缓存响应头 `Cache-Control: public, max-age=31536000`。
+4. **排版层 (`Telegraph Publisher`)**：超长章节自动分页（超过 100 张自动切分上、下卷，双向注入互跳导航栏）。
+5. **分发与预热层 (`Telegram Bot`)**：先发送至私有缓存频道强制 Telegram 爬虫建立 Instant View 缓存，延迟预热后向正式频道推送精美排版图文消息。
+
+### 💻 命令行使用方法 (CLI)
+
+```bash
+# 1. 独立图像压缩与切片性能测试（不执行网络上传与发布）
+python -m src.compressor --dir ./downloads/1001/01 --workers 2
+
+# 2. 流水线预演模式（DRY RUN 仅在内存测试压缩统计）
+python main.py --dir ./downloads/1001/01 --id 1001 --ch 1 --title "示例漫画 第01话" --dry-run
+
+# 3. 完整端到端上传与频道发布
+python main.py --dir ./downloads/1001/01 --id 1001 --ch 1 --title "示例漫画 第01话" --tags "同人,全彩"
+```
