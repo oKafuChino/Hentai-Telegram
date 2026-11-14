@@ -469,6 +469,29 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(s3.delete_manga_objects_sync("../"), 0)
         self.assertEqual(s3.delete_manga_objects_sync("manga/*"), 0)
 
+    async def test_create_chapter_page_pure_images(self):
+        client = TelegraphClient(access_token="test_token")
+        with patch.object(client, "create_page", return_value="https://telegra.ph/sample") as mock_cp:
+            mock_session = AsyncMock()
+            url = await client.create_chapter_page(
+                mock_session,
+                manga_title="测试标题",
+                chapter_title="第1话",
+                ordinal=1,
+                image_urls=["https://img.example.com/1.webp", "https://img.example.com/2.webp"],
+                channel_url="https://t.me/test_ch",
+            )
+            self.assertEqual(url, "https://telegra.ph/sample")
+            mock_cp.assert_called_once()
+            call_args = mock_cp.call_args
+            passed_nodes = call_args[0][2]
+            # Verify nodes only contain figure/img, no p or hr tags
+            self.assertEqual(len(passed_nodes), 2)
+            for node in passed_nodes:
+                self.assertEqual(node["tag"], "figure")
+                self.assertEqual(node["children"][0]["tag"], "img")
+
+
 
 if __name__ == "__main__":
     unittest.main()

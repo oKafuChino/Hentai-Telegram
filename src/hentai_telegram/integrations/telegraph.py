@@ -421,32 +421,12 @@ class TelegraphClient:
     ) -> str:
         page_title = f"{manga_title} - 第{ordinal}话 {chapter_title}".strip()
         nodes: list[dict[str, Any]] = [
-            {"tag": "p", "children": [f"📚 {manga_title} | 第 {ordinal} 话: {chapter_title}"]},
-        ]
-        if channel_url:
-            nodes.append({
-                "tag": "p",
-                "children": [{"tag": "a", "attrs": {"href": channel_url}, "children": ["📢 关注频道获取最新漫画更新"]}],
-            })
-        nodes.append({"tag": "hr"})
-
-        for url in image_urls:
-            nodes.append({
+            {
                 "tag": "figure",
                 "children": [{"tag": "img", "attrs": {"src": url}}],
-            })
-
-        nodes.append({"tag": "hr"})
-        if channel_url:
-            nodes.append({
-                "tag": "p",
-                "children": [{"tag": "a", "attrs": {"href": channel_url}, "children": ["📢 关注 Telegram 频道"]}],
-            })
-        else:
-            nodes.append({
-                "tag": "p",
-                "children": ["由 Hentai-Telegram 自动发布"],
-            })
+            }
+            for url in image_urls
+        ]
 
         return await self.create_page(session, page_title, nodes)
 
@@ -471,11 +451,6 @@ class TelegraphClient:
             {"tag": "p", "children": [f"🏷 标签: {', '.join(tags) if tags else '无'}"]},
             {"tag": "p", "children": [f"🆔 漫画ID: JM{clean_sid}"]},
         ]
-        if channel_url:
-            nodes.append({
-                "tag": "p",
-                "children": [{"tag": "a", "attrs": {"href": channel_url}, "children": ["📢 关注 Telegram 频道"]}],
-            })
         nodes.append({"tag": "hr"})
         nodes.append({"tag": "h4", "children": ["📖 章节列表"]})
 
@@ -492,11 +467,5 @@ class TelegraphClient:
             })
 
         nodes.append({"tag": "ol", "children": chapter_items})
-        nodes.append({"tag": "hr"})
-        if channel_url:
-            nodes.append({
-                "tag": "p",
-                "children": [{"tag": "a", "attrs": {"href": channel_url}, "children": ["📢 关注 Telegram 频道"]}],
-            })
 
         return await self.create_page(session, page_title, nodes)
