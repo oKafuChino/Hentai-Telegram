@@ -35,6 +35,7 @@ async def run(settings: Settings, db_path, recent_logs):
         author_name=settings.telegraph_author_name,
         author_url=settings.telegraph_author_url,
         token_file=db_path.parent / "telegraph_token.txt",
+        catbox_userhash=settings.catbox_userhash,
     )
 
     bot = Bot(settings.telegram_bot_token)

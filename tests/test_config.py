@@ -38,6 +38,24 @@ class TestConfig(unittest.TestCase):
             self.assertEqual(s.allowed_user_ids, frozenset({123, 456}))
             self.assertEqual(s.telegram_channel_id, "-1001234567890")
             self.assertEqual(s.telegraph_author_name, "TestChannel")
+            self.assertEqual(s.telegraph_upload_url, "https://catbox.moe/user/api.php")
+
+    def test_settings_upload_url_fallback(self):
+        with patch.dict(os.environ, {
+            "TELEGRAM_BOT_TOKEN": "valid_token",
+            "TELEGRAM_ALLOWED_USER_IDS": "123",
+            "TELEGRAPH_UPLOAD_URL": "https://telegra.ph/upload",
+        }, clear=True):
+            s = Settings.from_env()
+            self.assertEqual(s.telegraph_upload_url, "https://catbox.moe/user/api.php")
+
+        with patch.dict(os.environ, {
+            "TELEGRAM_BOT_TOKEN": "valid_token",
+            "TELEGRAM_ALLOWED_USER_IDS": "123",
+            "TELEGRAPH_UPLOAD_URL": "https://custom.proxy.dev/upload",
+        }, clear=True):
+            s = Settings.from_env()
+            self.assertEqual(s.telegraph_upload_url, "https://custom.proxy.dev/upload")
 
 
 if __name__ == "__main__":

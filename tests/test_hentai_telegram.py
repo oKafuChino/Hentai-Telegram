@@ -158,6 +158,55 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
                     pass
             self.assertIn("权限不足", str(ctx.exception))
 
+    async def test_telegraph_upload_catbox(self):
+        img = Path(self.temp_dir.name) / "sample.png"
+        img.write_bytes(sample_png())
+
+        client = TelegraphClient(upload_url="https://catbox.moe/user/api.php")
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.text.return_value = "https://files.catbox.moe/dummy.png\n"
+
+        session = MagicMock()
+        session.post.return_value.__aenter__.return_value = mock_resp
+
+        result = await client.upload_image(session, img)
+        self.assertEqual(result, "https://files.catbox.moe/dummy.png")
+
+    async def test_telegraph_upload_proxy_format(self):
+        img = Path(self.temp_dir.name) / "sample.png"
+        img.write_bytes(sample_png())
+
+        client = TelegraphClient(upload_url="https://custom.proxy.dev/upload")
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.json.return_value = [{"src": "/file/test.png"}]
+
+        session = MagicMock()
+        session.post.return_value.__aenter__.return_value = mock_resp
+
+        result = await client.upload_image(session, img)
+        self.assertEqual(result, "https://custom.proxy.dev/file/test.png")
+
+    async def test_telegraph_auto_redirect_dead_url(self):
+        img = Path(self.temp_dir.name) / "sample.png"
+        img.write_bytes(sample_png())
+
+        # Old dead upload_url: https://telegra.ph/upload should route to catbox
+        client = TelegraphClient(upload_url="https://telegra.ph/upload")
+        mock_resp = AsyncMock()
+        mock_resp.status = 200
+        mock_resp.text.return_value = "https://files.catbox.moe/from_redirect.png\n"
+
+        session = MagicMock()
+        session.post.return_value.__aenter__.return_value = mock_resp
+
+        result = await client.upload_image(session, img)
+        self.assertEqual(result, "https://files.catbox.moe/from_redirect.png")
+        # Ensure post called the catbox endpoint
+        call_args = session.post.call_args
+        self.assertEqual(call_args[0][0], "https://catbox.moe/user/api.php")
+
 
 if __name__ == "__main__":
     unittest.main()

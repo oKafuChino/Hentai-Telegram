@@ -31,10 +31,11 @@ class Settings:
     max_chapter_pages: int = 2000
     max_task_bytes: int = 10 * 1024**3
     telegraph_api_url: str = "https://api.telegra.ph"
-    telegraph_upload_url: str = "https://telegra.ph/upload"
+    telegraph_upload_url: str = "https://catbox.moe/user/api.php"
     telegraph_access_token: str = field(default="", repr=False)
     telegraph_author_name: str = "Hentai-Telegram"
     telegraph_author_url: str = ""
+    catbox_userhash: str = field(default="", repr=False)
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -57,6 +58,12 @@ class Settings:
         if minimum < 0 or resume <= minimum:
             raise ValueError("RESUME_FREE_SPACE_GB 必须大于 MIN_FREE_SPACE_GB")
 
+        raw_upload = os.getenv("TELEGRAPH_UPLOAD_URL", "").strip()
+        if not raw_upload or raw_upload.rstrip("/") == "https://telegra.ph/upload":
+            upload_url = "https://catbox.moe/user/api.php"
+        else:
+            upload_url = raw_upload
+
         return cls(
             telegram_bot_token=token,
             allowed_user_ids=allowed,
@@ -76,10 +83,11 @@ class Settings:
             max_chapter_pages=_int("MAX_CHAPTER_PAGES", 2000),
             max_task_bytes=_int("MAX_TASK_BYTES", 10 * 1024**3),
             telegraph_api_url=os.getenv("TELEGRAPH_API_URL", "https://api.telegra.ph").rstrip("/"),
-            telegraph_upload_url=os.getenv("TELEGRAPH_UPLOAD_URL", "https://telegra.ph/upload"),
+            telegraph_upload_url=upload_url,
             telegraph_access_token=os.getenv("TELEGRAPH_ACCESS_TOKEN", "").strip(),
             telegraph_author_name=os.getenv("TELEGRAPH_AUTHOR_NAME", "Hentai-Telegram").strip(),
             telegraph_author_url=os.getenv("TELEGRAPH_AUTHOR_URL", "").strip(),
+            catbox_userhash=os.getenv("CATBOX_USERHASH", "").strip(),
         )
 
     def __post_init__(self):

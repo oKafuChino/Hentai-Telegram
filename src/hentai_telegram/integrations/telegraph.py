@@ -19,18 +19,20 @@ class TelegraphClient:
     def __init__(
         self,
         api_url: str = "https://api.telegra.ph",
-        upload_url: str = "https://telegra.ph/upload",
+        upload_url: str = "https://catbox.moe/user/api.php",
         access_token: str = "",
         author_name: str = "Hentai-Telegram",
         author_url: str = "",
         token_file: Path | None = None,
+        catbox_userhash: str = "",
     ):
         self.api_url = api_url.rstrip("/")
-        self.upload_url = upload_url
+        self.upload_url = upload_url.strip() or "https://catbox.moe/user/api.php"
         self.access_token = access_token.strip()
         self.author_name = author_name
         self.author_url = author_url
         self.token_file = token_file
+        self.catbox_userhash = catbox_userhash.strip()
 
     async def ensure_token(self, session: aiohttp.ClientSession) -> str:
         if self.access_token:
@@ -63,10 +65,86 @@ class TelegraphClient:
         return self.access_token
 
     async def upload_image(self, session: aiohttp.ClientSession, image_path: Path) -> str:
-        """Upload a single local image to Telegraph upload service and return the hosted URL."""
+        """Upload a single local image to image hosting service and return the hosted URL.
+
+        Supports:
+        1. Catbox API (https://catbox.moe/user/api.php)
+        2. Telegraph-compatible image upload proxies (returning [{"src": "..."}])
+        3. Automatic fallback to Catbox if a custom upload proxy fails.
+        """
         if not image_path.is_file():
             raise TelegraphError(f"图片不存在: {image_path.name}", retryable=False)
 
+        target_url = self.upload_url.strip()
+        # telegra.ph/upload is permanently discontinued by Telegram; automatically use Catbox
+        if not target_url or target_url.rstrip("/") == "https://telegra.ph/upload":
+            target_url = "https://catbox.moe/user/api.php"
+
+        try:
+            return await self._do_upload(session, target_url, image_path)
+        except Exception as exc:
+            if "catbox.moe" not in target_url:
+                logger.warning("custom_upload_failed url=%s error=%s; falling back to catbox", target_url, exc)
+                try:
+                    return await self._upload_to_catbox(session, image_path)
+                except Exception as fb_exc:
+                    raise TelegraphError(f"图片上传失败 (主服务与备用 Catbox 均失败): {exc} / {fb_exc}") from fb_exc
+            raise
+
+    async def _do_upload(self, session: aiohttp.ClientSession, url: str, image_path: Path) -> str:
+        if "catbox.moe" in url:
+            return await self._upload_to_catbox(session, image_path, endpoint=url)
+        return await self._upload_to_telegraph_proxy(session, url, image_path)
+
+    async def _upload_to_catbox(
+        self,
+        session: aiohttp.ClientSession,
+        image_path: Path,
+        endpoint: str = "https://catbox.moe/user/api.php",
+    ) -> str:
+        ext = image_path.suffix.lower()
+        content_type = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".gif": "image/gif",
+        }.get(ext, "image/jpeg")
+
+        for attempt in range(3):
+            try:
+                with image_path.open("rb") as f:
+                    form = aiohttp.FormData()
+                    form.add_field("reqtype", "fileupload")
+                    if self.catbox_userhash:
+                        form.add_field("userhash", self.catbox_userhash)
+                    form.add_field(
+                        "fileToUpload",
+                        f,
+                        filename=image_path.name,
+                        content_type=content_type,
+                    )
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    }
+                    async with session.post(endpoint, data=form, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                        text = (await resp.text()).strip()
+                        if resp.status == 200 and text.startswith("http"):
+                            return text
+                        raise TelegraphError(f"Catbox 上传失败 HTTP {resp.status}: {text[:200]}")
+            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                if attempt == 2:
+                    raise TelegraphError(f"Catbox 连接失败: {exc}")
+                await asyncio.sleep(1 + attempt)
+
+        raise TelegraphError("Catbox 上传重试耗尽")
+
+    async def _upload_to_telegraph_proxy(
+        self,
+        session: aiohttp.ClientSession,
+        url: str,
+        image_path: Path,
+    ) -> str:
         ext = image_path.suffix.lower()
         content_type = {
             ".jpg": "image/jpeg",
@@ -86,31 +164,45 @@ class TelegraphClient:
                         filename=image_path.name,
                         content_type=content_type,
                     )
-                    async with session.post(self.upload_url, data=form, timeout=aiohttp.ClientTimeout(total=60)) as resp:
+                    headers = {
+                        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                    }
+                    async with session.post(url, data=form, headers=headers, timeout=aiohttp.ClientTimeout(total=60)) as resp:
                         if resp.status != 200:
                             text = await resp.text()
                             raise TelegraphError(f"HTTP {resp.status}: {text[:200]}")
-                        body = await resp.json(content_type=None)
+                        try:
+                            body = await resp.json(content_type=None)
+                        except Exception:
+                            text = (await resp.text()).strip()
+                            if text.startswith("http"):
+                                return text
+                            raise TelegraphError(f"代理上传响应格式错误: {text[:200]}")
+
                         if isinstance(body, list) and len(body) > 0 and "src" in body[0]:
                             src = body[0]["src"]
                             if src.startswith("http://") or src.startswith("https://"):
                                 return src
-                            # Relative path: prepend origin of upload_url or https://telegra.ph
                             base = "https://telegra.ph"
-                            if "://" in self.upload_url:
-                                parts = self.upload_url.split("://", 1)
+                            if "://" in url:
+                                parts = url.split("://", 1)
                                 domain = parts[1].split("/", 1)[0]
                                 base = f"{parts[0]}://{domain}"
                             return f"{base}{src}"
-                        if isinstance(body, dict) and "error" in body:
-                            raise TelegraphError(f"Telegraph 响应错误: {body['error']}")
-                        raise TelegraphError(f"Telegraph 上传返回无效格式: {body}")
+                        if isinstance(body, dict):
+                            if "url" in body:
+                                return body["url"]
+                            if "src" in body:
+                                return body["src"]
+                            if "error" in body:
+                                raise TelegraphError(f"代理上传响应错误: {body['error']}")
+                        raise TelegraphError(f"代理上传返回未知数据: {body}")
             except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
                 if attempt == 2:
-                    raise TelegraphError(f"上传图片连接失败: {exc}")
+                    raise TelegraphError(f"代理上传连接失败: {exc}")
                 await asyncio.sleep(1 + attempt)
 
-        raise TelegraphError("上传图片重试耗尽")
+        raise TelegraphError("代理上传重试耗尽")
 
     async def create_page(
         self,
