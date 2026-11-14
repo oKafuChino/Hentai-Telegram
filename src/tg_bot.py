@@ -48,7 +48,7 @@ class TelegramNotifier:
         escaped_title = html.escape(title)
         lines = [
             f"📖 <b>{escaped_title}</b>",
-            f"🔢 <b>话数</b>: 第 {chapter_num} 话",
+            f"🔢 <b>话数</b>: 第 {html.escape(str(chapter_num))} 话",
         ]
 
         if tags:
@@ -62,7 +62,7 @@ class TelegramNotifier:
 
         num_urls = len(telegraph_urls)
         if num_urls == 1:
-            lines.append(f"👉 <a href=\"{telegraph_urls[0]}\">点击即时阅读</a>")
+            lines.append(f'👉 <a href="{html.escape(telegraph_urls[0], quote=True)}">点击即时阅读</a>')
         else:
             for idx, u in enumerate(telegraph_urls, 1):
                 if num_urls == 2:
@@ -71,7 +71,7 @@ class TelegramNotifier:
                     label = ["上卷", "中卷", "下卷"][idx - 1]
                 else:
                     label = f"第 {idx}/{num_urls} 卷"
-                lines.append(f"👉 <a href=\"{u}\">{label} 点击阅读</a>")
+                lines.append(f'👉 <a href="{html.escape(u, quote=True)}">{label} 点击阅读</a>')
 
         caption = "\n".join(lines)
 

@@ -3,7 +3,7 @@ from html import escape
 from pathlib import Path
 
 from aiogram import Bot
-from aiogram.types import BufferedInputFile, InlineKeyboardButton, InlineKeyboardMarkup
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from hentai_telegram.domain.models import Manga
 
@@ -76,26 +76,29 @@ class ChannelPublisher:
 
         # Chapter links in text
         if len(chapters) == 1:
-            url = chapters[0].get("telegraph_url") or "#"
+            url = escape(chapters[0].get("telegraph_url") or "#", quote=True)
             caption_lines.append(f'• <a href="{url}">点击在线阅读全文</a>')
         elif len(chapters) <= 12:
             for ch in chapters:
-                url = ch.get("telegraph_url") or "#"
-                ordinal = ch.get("ordinal", 1)
+                url = escape(ch.get("telegraph_url") or "#", quote=True)
+                ordinal = escape(str(ch.get("ordinal", 1)))
                 title = escape(ch.get("title", f"第 {ordinal} 话"))
                 caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
         else:
             if manga.index_url:
-                caption_lines.append(f'• <a href="{manga.index_url}">📑 查看全本完整目录（共 {len(chapters)} 话）</a>')
+                idx_url = escape(manga.index_url, quote=True)
+                caption_lines.append(f'• <a href="{idx_url}">📑 查看全本完整目录（共 {len(chapters)} 话）</a>')
             for ch in chapters[:5]:
-                url = ch.get("telegraph_url") or "#"
-                title = escape(ch.get("title", f"第 {ch['ordinal']} 话"))
-                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{title}</a>')
+                url = escape(ch.get("telegraph_url") or "#", quote=True)
+                ordinal = escape(str(ch.get("ordinal", 1)))
+                title = escape(ch.get("title", f"第 {ordinal} 话"))
+                caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
             caption_lines.append("• ... （更多章节请查看完整目录）")
             for ch in chapters[-3:]:
-                url = ch.get("telegraph_url") or "#"
-                title = escape(ch.get("title", f"第 {ch['ordinal']} 话"))
-                caption_lines.append(f'• <a href="{url}">第 {ch["ordinal"]} 话：{title}</a>')
+                url = escape(ch.get("telegraph_url") or "#", quote=True)
+                ordinal = escape(str(ch.get("ordinal", 1)))
+                title = escape(ch.get("title", f"第 {ordinal} 话"))
+                caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
 
         # Safely constrain caption length to avoid breaking HTML tags or exceeding Telegram's 1024 limit
         safe_lines = []
@@ -105,7 +108,8 @@ class ChannelPublisher:
         for line in caption_lines:
             if current_len + len(line) + 1 > limit and not truncated:
                 if manga.index_url:
-                    safe_lines.append(f'• <a href="{manga.index_url}">📑 更多章节详见全本目录...</a>')
+                    idx_url = escape(manga.index_url, quote=True)
+                    safe_lines.append(f'• <a href="{idx_url}">📑 更多章节详见全本目录...</a>')
                 else:
                     safe_lines.append("• ... (更多章节请在线阅读)")
                 truncated = True

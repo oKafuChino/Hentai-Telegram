@@ -132,7 +132,7 @@ def comic_info(manga: Manga, chapter: Chapter) -> bytes:
 
 def staged_pages(staging: Path, number: int):
     """Only exact canonical page filenames; never include SDK scratch files."""
-    return [p for extension in (".jpg", ".png", ".webp")
+    return [p for extension in (".jpg", ".jpeg", ".png", ".webp")
             if (p := staging / f"{number:06d}{extension}").exists() or p.is_symlink()]
 
 

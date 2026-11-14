@@ -136,6 +136,14 @@ class TestPipelineModules(unittest.TestCase):
             self.assertEqual(second_call[0][1]["path"], "random-uuid-path")
             self.assertEqual(second_call[0][1]["title"], "真实漫画标题")
 
+    def test_r2_storage_delete_sanitizes_id(self):
+        with patch("boto3.client"):
+            client = R2StorageClient(self.settings)
+            self.assertEqual(client.delete_manga_objects(""), 0)
+            self.assertEqual(client.delete_manga_objects("../"), 0)
+            self.assertEqual(client.delete_manga_objects("manga/*"), 0)
+
+
 
 
 if __name__ == "__main__":

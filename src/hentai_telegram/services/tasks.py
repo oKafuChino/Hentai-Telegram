@@ -49,7 +49,7 @@ class TaskService:
         self.telegraph = telegraph
 
     def authorize(self, user_id: int):
-        if self.allowed_user_ids and user_id not in self.allowed_user_ids:
+        if not self.allowed_user_ids or user_id not in self.allowed_user_ids:
             raise ValueError("抱歉，本机器人为私有频道管理机器人，仅管理员可用。")
 
     async def download(
@@ -191,21 +191,52 @@ class TaskService:
             import shutil
             from pathlib import Path
 
-            root_path = Path(storage_root)
+            from hentai_telegram.storage.cbz import id_component
+
+            root_path = Path(storage_root).resolve()
             if root_path.is_dir():
-                staging_dir = root_path / "staging"
+                staging_dir = (root_path / "staging").resolve()
                 for t in tasks:
-                    t_stage = staging_dir / f"task_{t['id']}"
-                    if t_stage.exists():
+                    t_stage = (staging_dir / f"task_{t['id']}").resolve()
+                    if t_stage.exists() and t_stage.is_relative_to(staging_dir) and t_stage != staging_dir:
                         shutil.rmtree(t_stage, ignore_errors=True)
                         deleted_local_files += 1
-                for item in root_path.glob(f"*{source_id}*"):
-                    if item.is_dir():
-                        shutil.rmtree(item, ignore_errors=True)
-                        deleted_local_files += 1
-                    elif item.is_file():
-                        item.unlink(missing_ok=True)
-                        deleted_local_files += 1
+
+                id_comp = id_component(source_id)
+                src_comp = id_component(source)
+                matched_items = set()
+
+                def _scan_and_match(directory: Path):
+                    if not directory.is_dir():
+                        return
+                    for item in directory.iterdir():
+                        if item == staging_dir or item.name == "staging":
+                            continue
+                        name = item.name
+                        if (
+                            f"[{src_comp}-{id_comp}]" in name
+                            or f"[{id_comp}]" in name
+                            or f"[JM{source_id}]" in name
+                            or f"_JM{source_id}" in name
+                            or name in (f"JM{source_id}", str(source_id))
+                        ):
+                            matched_items.add(item)
+
+                _scan_and_match(root_path)
+                for sub in ("library", "download"):
+                    _scan_and_match((root_path / sub).resolve())
+
+                for item in matched_items:
+                    try:
+                        if item.is_relative_to(root_path) and item != root_path and item != staging_dir:
+                            if item.is_dir():
+                                shutil.rmtree(item, ignore_errors=True)
+                                deleted_local_files += 1
+                            elif item.is_file():
+                                item.unlink(missing_ok=True)
+                                deleted_local_files += 1
+                    except Exception as exc:  # noqa: BLE001
+                        logger.warning("删除本地缓存文件失败 item=%s: %s", item, exc)
 
         # 6. Database record deletion
         self.store.delete_manga(source, source_id)

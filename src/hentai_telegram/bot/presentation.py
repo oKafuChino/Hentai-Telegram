@@ -34,7 +34,7 @@ def describe_task(task: dict, channel_id: str = "") -> str:
 
     if task.get("channel_message_id") and channel_id:
         link = channel_post_link(channel_id, task["channel_message_id"])
-        lines.append(f"📢 频道消息：<a href=\"{link}\">点击查看频道推文</a>")
+        lines.append(f'📢 频道消息：<a href="{escape(link, quote=True)}">点击查看频道推文</a>')
 
     if task.get("error"):
         lines.append(f"⚠️ 提示：{escape(str(task['error']))}")

@@ -138,6 +138,8 @@ class R2StorageClient:
             return 0
         deleted_count = 0
         clean_id = str(manga_id).strip()
+        if not clean_id or any(c in clean_id for c in ("/", "\\", "*", "?", "..")):
+            return 0
         prefixes = [
             f"manga_{clean_id}/",
             f"manga/{clean_id}/",
@@ -157,6 +159,6 @@ class R2StorageClient:
                             Delete={"Objects": chunk},
                         )
                         deleted_count += len(res.get("Deleted", []))
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001
                 logger.warning(f"R2 删除对象异常 prefix={prefix}: {exc}")
         return deleted_count

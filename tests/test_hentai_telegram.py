@@ -15,6 +15,8 @@ from hentai_telegram.integrations.telegraph import TelegraphClient
 from hentai_telegram.runtime import instance_lock
 from hentai_telegram.services.channel_push import ChannelPublisher, channel_post_link
 from hentai_telegram.services.tasks import TaskService
+from hentai_telegram.storage.cbz import staged_pages
+from hentai_telegram.storage.s3 import S3StorageClient
 from hentai_telegram.workers.queue import Worker
 
 
@@ -259,6 +261,19 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(preview_opt.prefer_large_media)
         self.assertTrue(preview_opt.show_above_text)
 
+    def test_task_service_authorize_fails_closed(self):
+        # Empty whitelist fails closed
+        svc_empty = TaskService(self.store, self.provider, allowed_user_ids=frozenset())
+        with self.assertRaises(ValueError) as ctx:
+            svc_empty.authorize(1001)
+        self.assertIn("仅管理员可用", str(ctx.exception))
+
+        # None whitelist fails closed
+        svc_none = TaskService(self.store, self.provider, allowed_user_ids=None)
+        with self.assertRaises(ValueError) as ctx:
+            svc_none.authorize(1001)
+        self.assertIn("仅管理员可用", str(ctx.exception))
+
     async def test_task_service_delete_unauthorized(self):
         svc = TaskService(self.store, self.provider, allowed_user_ids=frozenset({1001}))
         with self.assertRaises(ValueError) as ctx:
@@ -426,6 +441,27 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         edit_payload = call_edit[1]["data"]
         self.assertEqual(edit_payload["path"], "random-uuid-slug-11-15")
         self.assertEqual(edit_payload["title"], "实际漫画原标题")
+
+    def test_staged_pages_supports_jpeg(self):
+        staging = Path(self.temp_dir.name) / "test_staged"
+        staging.mkdir(parents=True, exist_ok=True)
+        jpeg_file = staging / "000001.jpeg"
+        jpeg_file.write_bytes(b"dummy")
+        pages = staged_pages(staging, 1)
+        self.assertEqual(len(pages), 1)
+        self.assertEqual(pages[0], jpeg_file)
+
+    def test_s3_storage_delete_sanitizes_id(self):
+        s3 = S3StorageClient(
+            endpoint_url="https://r2.example.com",
+            bucket_name="test-bucket",
+            access_key_id="test-key",
+            secret_access_key="test-secret",
+        )
+        # Empty or traversal ids should be rejected immediately with 0 deletions
+        self.assertEqual(s3.delete_manga_objects_sync(""), 0)
+        self.assertEqual(s3.delete_manga_objects_sync("../"), 0)
+        self.assertEqual(s3.delete_manga_objects_sync("manga/*"), 0)
 
 
 if __name__ == "__main__":

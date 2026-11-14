@@ -60,6 +60,8 @@ def compress_single_image(
     """
     idx, image_path, config = task
     p = Path(image_path)
+    if not p.is_file():
+        return []
 
     with Image.open(p) as raw_img:
         # Handle transparency: composite RGBA or transparent palette onto white background
@@ -73,6 +75,10 @@ def compress_single_image(
         else:
             img = raw_img.copy()
 
+    orig_w, orig_h = img.size
+    if orig_w <= 0 or orig_h <= 0:
+        return []
+
     # Color routing: determine grayscale vs color
     is_bw = is_grayscale_image(img, config.grayscale_threshold)
     if is_bw:
@@ -85,7 +91,6 @@ def compress_single_image(
         target_quality = config.quality_color
 
     # Viewport alignment: Lanczos downscaling
-    orig_w, orig_h = img.size
     if orig_w > target_max_w:
         scale = target_max_w / float(orig_w)
         new_h = max(1, round(orig_h * scale))

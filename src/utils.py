@@ -60,7 +60,7 @@ def format_bytes(size: float) -> str:
 
 def calculate_md5(data_or_path: bytes | str | Path) -> str:
     """Calculate MD5 hex digest for raw bytes or a file path."""
-    hasher = hashlib.md5()
+    hasher = hashlib.md5(usedforsecurity=False)
     if isinstance(data_or_path, (str, Path)):
         p = Path(data_or_path)
         with p.open("rb") as f:

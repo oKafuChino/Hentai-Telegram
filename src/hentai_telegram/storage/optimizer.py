@@ -101,6 +101,8 @@ def optimize_image(
 
             # Viewport downscaling
             orig_w, orig_h = im.size
+            if orig_w <= 0 or orig_h <= 0:
+                return image_path
             if target_w > 0 and orig_w > target_w:
                 new_h = max(1, round(orig_h * (target_w / float(orig_w))))
                 im = im.resize((target_w, new_h), Image.Resampling.LANCZOS)
