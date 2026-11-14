@@ -260,6 +260,12 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(preview_opt.url, "https://telegra.ph/manga-1")
         self.assertTrue(preview_opt.prefer_large_media)
         self.assertTrue(preview_opt.show_above_text)
+        caption_text = kwargs["text"]
+        self.assertIn("📖 来源:JMComic", caption_text)
+        self.assertIn("📝 作者：", caption_text)
+        self.assertIn("🆔 漫画 ID：<code>JM12345</code>", caption_text)
+        self.assertNotIn("在线阅读（Telegraph）", caption_text)
+        self.assertNotIn("点击在线阅读全文", caption_text)
 
     def test_task_service_authorize_fails_closed(self):
         # Empty whitelist fails closed

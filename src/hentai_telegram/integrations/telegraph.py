@@ -462,11 +462,14 @@ class TelegraphClient:
     ) -> str:
         """Create a table of contents / index page for multi-chapter manga."""
         page_title = f"{manga_title} - 目录".strip()
+        raw_sid = str(source_id).strip()
+        clean_sid = raw_sid[2:] if raw_sid.upper().startswith("JM") else raw_sid
         nodes: list[dict[str, Any]] = [
             {"tag": "h3", "children": [manga_title]},
-            {"tag": "p", "children": [f"👨‍🎨 作者: {', '.join(authors) if authors else '未知'}"]},
+            {"tag": "p", "children": ["📖 来源: JMComic"]},
+            {"tag": "p", "children": [f"📝 作者: {', '.join(authors) if authors else '未知'}"]},
             {"tag": "p", "children": [f"🏷 标签: {', '.join(tags) if tags else '无'}"]},
-            {"tag": "p", "children": [f"🔢 漫画ID: JM{source_id}"]},
+            {"tag": "p", "children": [f"🆔 漫画ID: JM{clean_sid}"]},
         ]
         if channel_url:
             nodes.append({

@@ -60,45 +60,52 @@ class ChannelPublisher:
             raise ValueError("未配置 TELEGRAM_CHANNEL_ID，无法发布至频道")
 
         target = int(self.channel_id) if self.channel_id.lstrip("-").isdigit() else self.channel_id
+        raw_source = getattr(manga, "source", None) or "jmcomic"
+        if raw_source.lower() in ("jmcomic", "jm"):
+            source_name = "JMComic"
+        else:
+            source_name = raw_source
+
         authors_text = escape(", ".join(manga.authors) if manga.authors else "未知")
         tags_text = escape(", ".join(manga.tags[:15]) if manga.tags else "无")
         title_text = escape(manga.title)
-        source_id_text = escape(str(manga.source_id))
+        raw_sid = str(manga.source_id).strip()
+        clean_sid = raw_sid[2:] if raw_sid.upper().startswith("JM") else raw_sid
+        source_id_text = escape(clean_sid)
 
         caption_lines = [
             f"📚 <b>{title_text}</b>",
-            f"👨‍🎨 作者：{authors_text}",
+            f"📖 来源:{escape(source_name)}",
+            f"📝 作者：{authors_text}",
             f"🏷 标签：{tags_text}",
-            f"🔢 漫画 ID：<code>JM{source_id_text}</code>",
-            "",
-            "📖 <b>在线阅读（Telegraph）</b>：",
+            f"🆔 漫画 ID：<code>JM{source_id_text}</code>",
         ]
 
-        # Chapter links in text
-        if len(chapters) == 1:
-            url = escape(chapters[0].get("telegraph_url") or "#", quote=True)
-            caption_lines.append(f'• <a href="{url}">点击在线阅读全文</a>')
-        elif len(chapters) <= 12:
-            for ch in chapters:
-                url = escape(ch.get("telegraph_url") or "#", quote=True)
-                ordinal = escape(str(ch.get("ordinal", 1)))
-                title = escape(ch.get("title", f"第 {ordinal} 话"))
-                caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
-        else:
-            if manga.index_url:
-                idx_url = escape(manga.index_url, quote=True)
-                caption_lines.append(f'• <a href="{idx_url}">📑 查看全本完整目录（共 {len(chapters)} 话）</a>')
-            for ch in chapters[:5]:
-                url = escape(ch.get("telegraph_url") or "#", quote=True)
-                ordinal = escape(str(ch.get("ordinal", 1)))
-                title = escape(ch.get("title", f"第 {ordinal} 话"))
-                caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
-            caption_lines.append("• ... （更多章节请查看完整目录）")
-            for ch in chapters[-3:]:
-                url = escape(ch.get("telegraph_url") or "#", quote=True)
-                ordinal = escape(str(ch.get("ordinal", 1)))
-                title = escape(ch.get("title", f"第 {ordinal} 话"))
-                caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
+        # Chapter links in text (for multi-chapter manga)
+        if len(chapters) > 1:
+            caption_lines.append("")
+            caption_lines.append("📑 <b>章节列表</b>：")
+            if len(chapters) <= 12:
+                for ch in chapters:
+                    url = escape(ch.get("telegraph_url") or "#", quote=True)
+                    ordinal = escape(str(ch.get("ordinal", 1)))
+                    title = escape(ch.get("title", f"第 {ordinal} 话"))
+                    caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
+            else:
+                if manga.index_url:
+                    idx_url = escape(manga.index_url, quote=True)
+                    caption_lines.append(f'• <a href="{idx_url}">📑 查看全本完整目录（共 {len(chapters)} 话）</a>')
+                for ch in chapters[:5]:
+                    url = escape(ch.get("telegraph_url") or "#", quote=True)
+                    ordinal = escape(str(ch.get("ordinal", 1)))
+                    title = escape(ch.get("title", f"第 {ordinal} 话"))
+                    caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
+                caption_lines.append("• ... （更多章节请查看完整目录）")
+                for ch in chapters[-3:]:
+                    url = escape(ch.get("telegraph_url") or "#", quote=True)
+                    ordinal = escape(str(ch.get("ordinal", 1)))
+                    title = escape(ch.get("title", f"第 {ordinal} 话"))
+                    caption_lines.append(f'• <a href="{url}">第 {ordinal} 话：{title}</a>')
 
         # Safely constrain caption length to avoid breaking HTML tags or exceeding Telegram's 1024 limit
         safe_lines = []
