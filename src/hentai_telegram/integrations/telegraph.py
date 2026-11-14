@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -149,7 +150,7 @@ class TelegraphClient:
                         if resp.status == 200 and text.startswith("http"):
                             return text
                         raise TelegraphError(f"Catbox 上传失败 HTTP {resp.status}: {text[:200]}")
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientError) as exc:
                 if attempt == 2:
                     raise TelegraphError(f"Catbox 连接失败: {exc}")
                 await asyncio.sleep(1 + attempt)
@@ -190,7 +191,7 @@ class TelegraphClient:
                             raise TelegraphError(f"HTTP {resp.status}: {text[:200]}")
                         try:
                             body = await resp.json(content_type=None)
-                        except Exception:
+                        except Exception:  # noqa: BLE001
                             text = (await resp.text()).strip()
                             if text.startswith("http"):
                                 return text
@@ -198,7 +199,7 @@ class TelegraphClient:
 
                         if isinstance(body, list) and len(body) > 0 and "src" in body[0]:
                             src = body[0]["src"]
-                            if src.startswith("http://") or src.startswith("https://"):
+                            if src.startswith(("http://", "https://")):
                                 return src
                             base = "https://telegra.ph"
                             if "://" in url:
@@ -214,7 +215,7 @@ class TelegraphClient:
                             if "error" in body:
                                 raise TelegraphError(f"代理上传响应错误: {body['error']}")
                         raise TelegraphError(f"代理上传返回未知数据: {body}")
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+            except (TimeoutError, aiohttp.ClientError) as exc:
                 if attempt == 2:
                     raise TelegraphError(f"代理上传连接失败: {exc}")
                 await asyncio.sleep(1 + attempt)
@@ -230,15 +231,18 @@ class TelegraphClient:
         author_url: str = "",
     ) -> str:
         token = await self.ensure_token(session)
+        # Use random UUID as temporary title to control telegraph page path/slug
+        random_title = str(uuid.uuid4())
         payload = {
             "access_token": token,
-            "title": (title[:250] or "Manga"),
+            "title": random_title,
             "author_name": (author_name or self.author_name)[:128],
             "author_url": (author_url or self.author_url)[:512],
             "content": json.dumps(content, ensure_ascii=False),
             "return_content": False,
         }
 
+        created_res = None
         for attempt in range(3):
             try:
                 async with session.post(
@@ -252,13 +256,33 @@ class TelegraphClient:
                     data = await resp.json()
                     if not data.get("ok"):
                         raise TelegraphError(f"发布页面失败: {data.get('error', '未知错误')}")
-                    return data["result"]["url"]
-            except (aiohttp.ClientError, asyncio.TimeoutError) as exc:
+                    created_res = data["result"]
+                    break
+            except (TimeoutError, aiohttp.ClientError) as exc:
                 if attempt == 2:
-                    raise TelegraphError(f"发布页面网络失败: {exc}")
+                    raise TelegraphError(f"发布页面网络失败: {exc}") from exc
                 await asyncio.sleep(1 + attempt)
 
-        raise TelegraphError("发布页面重试耗尽")
+        if not created_res:
+            raise TelegraphError("发布页面重试耗尽")
+
+        page_path = created_res.get("path") or created_res["url"].split("telegra.ph/")[-1]
+        page_url = created_res["url"]
+
+        # Rename back to original title via editPage while preserving random slug path
+        try:
+            await self.edit_page(
+                session=session,
+                path=page_path,
+                title=title,
+                content=content,
+                author_name=author_name or self.author_name,
+                author_url=author_url or self.author_url,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("telegraph_restore_title_failed path=%s error=%s", page_path, exc)
+
+        return page_url
 
     async def edit_page(
         self,
@@ -266,8 +290,8 @@ class TelegraphClient:
         path: str,
         title: str,
         content: list[dict[str, Any]],
-        author_name: str = "",
-        author_url: str = "",
+        author_name: str | None = None,
+        author_url: str | None = None,
     ) -> bool:
         """Edit an existing Telegraph page."""
         token = await self.ensure_token(session)
@@ -276,12 +300,15 @@ class TelegraphClient:
             clean_path = clean_path.split("telegra.ph/", 1)[1]
         clean_path = clean_path.split("?")[0].split("#")[0].strip("/")
 
+        eff_author = self.author_name if author_name is None else author_name
+        eff_author_url = self.author_url if author_url is None else author_url
+
         payload = {
             "access_token": token,
             "path": clean_path,
             "title": (title[:250] or "已删除"),
-            "author_name": (author_name or "")[:128],
-            "author_url": (author_url or "")[:512],
+            "author_name": (eff_author or "")[:128],
+            "author_url": (eff_author_url or "")[:512],
             "content": json.dumps(content, ensure_ascii=False),
             "return_content": False,
         }

@@ -152,10 +152,11 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
 
     def test_instance_lock_permission_error(self):
         lock_path = Path(self.temp_dir.name) / "perm.lock"
-        with patch.object(Path, "open", side_effect=PermissionError("Mock denied")):
-            with self.assertRaises(PermissionError) as ctx:
-                with instance_lock(lock_path):
-                    pass
+        with (
+            patch.object(Path, "open", side_effect=PermissionError("Mock denied")),
+            self.assertRaises(PermissionError) as ctx,
+            instance_lock(lock_path),
+        ):
             self.assertIn("权限不足", str(ctx.exception))
 
     async def test_telegraph_upload_catbox(self):
@@ -374,6 +375,57 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         payload = call_args[1]["data"]
         self.assertEqual(payload["path"], "test-page")
         self.assertEqual(payload["title"], "已删除")
+
+    async def test_telegraph_client_create_page_uuid_slug_and_rename(self):
+        client = TelegraphClient(access_token="test_token")
+        mock_create_resp = AsyncMock()
+        mock_create_resp.status = 200
+        mock_create_resp.json.return_value = {
+            "ok": True,
+            "result": {
+                "path": "random-uuid-slug-11-15",
+                "url": "https://telegra.ph/random-uuid-slug-11-15",
+            },
+        }
+
+        mock_edit_resp = AsyncMock()
+        mock_edit_resp.status = 200
+        mock_edit_resp.json.return_value = {
+            "ok": True,
+            "result": {
+                "path": "random-uuid-slug-11-15",
+                "title": "实际漫画原标题",
+            },
+        }
+
+        mock_session = MagicMock()
+        mock_session.post.return_value.__aenter__.side_effect = [mock_create_resp, mock_edit_resp]
+
+        content = [{"tag": "p", "children": ["测试正文"]}]
+        url = await client.create_page(
+            session=mock_session,
+            title="实际漫画原标题",
+            content=content,
+        )
+
+        self.assertEqual(url, "https://telegra.ph/random-uuid-slug-11-15")
+        self.assertEqual(mock_session.post.call_count, 2)
+
+        # 1st call: createPage with random UUID as title
+        call_create = mock_session.post.call_args_list[0]
+        self.assertIn("/createPage", call_create[0][0])
+        create_payload = call_create[1]["data"]
+        create_title = create_payload["title"]
+        self.assertNotEqual(create_title, "实际漫画原标题")
+        import uuid
+        uuid.UUID(create_title)
+
+        # 2nd call: editPage restoring original title
+        call_edit = mock_session.post.call_args_list[1]
+        self.assertIn("/editPage", call_edit[0][0])
+        edit_payload = call_edit[1]["data"]
+        self.assertEqual(edit_payload["path"], "random-uuid-slug-11-15")
+        self.assertEqual(edit_payload["title"], "实际漫画原标题")
 
 
 if __name__ == "__main__":

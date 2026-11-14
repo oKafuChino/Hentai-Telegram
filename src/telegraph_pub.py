@@ -3,6 +3,7 @@
 import math
 import re
 import time
+import uuid
 from collections.abc import Sequence
 from typing import Any
 
@@ -87,17 +88,31 @@ class TelegraphPublisher:
         return self.access_token
 
     def _create_page_raw(self, title: str, content_nodes: list[dict[str, Any]]) -> dict[str, str]:
-        """Create a single Telegraph page returning {'path': ..., 'url': ...}."""
+        """Create a single Telegraph page returning {'path': ..., 'url': ...}.
+
+        Controls URL suffix by creating page with random UUID title, then immediately
+        renaming back to the actual title.
+        """
         token = self.ensure_account()
+        random_title = str(uuid.uuid4())
         payload = {
             "access_token": token,
-            "title": title[:64],  # Telegraph max title length is 64
+            "title": random_title,
             "author_name": self.author_name,
             "content": content_nodes,
             "return_content": False,
         }
         res = self._call_api_sync("createPage", payload)
-        return {"path": res["path"], "url": res["url"]}
+        path = res["path"]
+        url = res["url"]
+
+        # Rename back to original title
+        try:
+            self._edit_page_raw(path, title[:64], content_nodes)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(f"更新 Telegraph 页面原标题失败 path={path}: {exc}")
+
+        return {"path": path, "url": url}
 
     def _edit_page_raw(self, path: str, title: str, content_nodes: list[dict[str, Any]]) -> None:
         """Edit an existing Telegraph page."""

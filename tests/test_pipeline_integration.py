@@ -110,6 +110,33 @@ class TestPipelineModules(unittest.TestCase):
             self.assertEqual(first_call_args[0][1]["path"], "page-1")
             self.assertEqual(first_call_args[0][1]["title"], "已删除")
 
+    def test_telegraph_create_page_raw_uuid_slug_and_rename(self):
+        pub = TelegraphPublisher(self.settings)
+        content_nodes = [{"tag": "p", "children": ["hello"]}]
+
+        with patch.object(pub, "_call_api_sync") as mock_call:
+            mock_call.side_effect = [
+                {"path": "random-uuid-path", "url": "https://telegra.ph/random-uuid-path"},
+                {"path": "random-uuid-path"},
+            ]
+            result = pub._create_page_raw("真实漫画标题", content_nodes)
+            self.assertEqual(result, {"path": "random-uuid-path", "url": "https://telegra.ph/random-uuid-path"})
+            self.assertEqual(mock_call.call_count, 2)
+
+            # 1st call: createPage with UUID title
+            first_call = mock_call.call_args_list[0]
+            self.assertEqual(first_call[0][0], "createPage")
+            create_title = first_call[0][1]["title"]
+            import uuid
+            uuid.UUID(create_title)  # will raise if not a valid UUID
+
+            # 2nd call: editPage restoring original title
+            second_call = mock_call.call_args_list[1]
+            self.assertEqual(second_call[0][0], "editPage")
+            self.assertEqual(second_call[0][1]["path"], "random-uuid-path")
+            self.assertEqual(second_call[0][1]["title"], "真实漫画标题")
+
+
 
 if __name__ == "__main__":
     unittest.main()
