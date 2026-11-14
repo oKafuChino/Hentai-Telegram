@@ -57,6 +57,17 @@ class TestOptimizer(unittest.TestCase):
         self.assertEqual(opt, src)
         self.assertEqual(opt.stat().st_mtime, orig_mtime)
 
+    def test_compress_image_larger_than_100kb(self):
+        # Create an uncompressed large JPEG larger than 100KB
+        img = Image.new("RGB", (2000, 2000), "gray")
+        src = self.root / "large.jpg"
+        img.save(src, "JPEG", quality=100, subsampling=0)
+        self.assertGreater(src.stat().st_size, 100 * 1024)
+
+        opt = optimize_image(src, max_width_bw=1280, quality_bw=75, min_bytes=100 * 1024)
+        self.assertEqual(opt.suffix, ".jpg")
+        self.assertLess(opt.stat().st_size, 100 * 1024)
+
     def test_nonexistent_file(self):
         src = self.root / "missing.jpg"
         self.assertEqual(optimize_image(src), src)

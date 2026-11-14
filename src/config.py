@@ -15,6 +15,7 @@ class CompressConfig(BaseModel):
     quality_color: int = Field(default=80, description="彩页编码质量 (0-100)")
     grayscale_threshold: float = Field(default=3.5, description="黑白/彩色通道差异判别阈值")
     image_format: str = Field(default="JPEG", description="输出图片格式 (JPEG/WEBP，Telegram Instant View 需使用 JPEG)")
+    image_min_compress_bytes: int = Field(default=102400, description="触发压缩的最小文件体积 (bytes，默认 100KB)")
 
 
 class Settings(BaseSettings):
@@ -37,6 +38,7 @@ class Settings(BaseSettings):
     quality_color: int = Field(default=80, description="彩页编码质量")
     grayscale_threshold: float = Field(default=3.5, description="灰度识别阈值")
     image_format: str = Field(default="JPEG", description="图片格式 (默认 JPEG 保证 Instant View 兼容)")
+    image_min_compress_bytes: int = Field(default=102400, description="触发压缩的最小文件大小 (bytes，默认 100KB)")
 
     # --- Telegraph 与分页配置 ---
     telegraph_short_name: str = Field(default="MangaBot", description="Telegraph 短名")
@@ -66,4 +68,5 @@ class Settings(BaseSettings):
             quality_color=self.quality_color,
             grayscale_threshold=self.grayscale_threshold,
             image_format=self.image_format,
+            image_min_compress_bytes=self.image_min_compress_bytes,
         )

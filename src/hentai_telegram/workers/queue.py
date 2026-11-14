@@ -104,7 +104,7 @@ class Worker:
         except asyncio.CancelledError:
             raise
         except Exception as exc:
-            logger.exception("task_failure task=%s exception=%s", task_id, exc)
+            logger.exception("task_failure task=%s", task_id)
             self.store.finish(task_id, "FAILED", "INTERNAL", f"内部错误: {exc}")
         finally:
             self.current_task = None
@@ -217,6 +217,7 @@ class Worker:
                                 quality_bw=self.settings.quality_bw,
                                 quality_color=self.settings.quality_color,
                                 grayscale_threshold=self.settings.grayscale_threshold,
+                                min_bytes=self.settings.image_min_compress_bytes,
                             )
                         shutil.copy2(p1, cover_path)
 
@@ -245,6 +246,7 @@ class Worker:
                             quality_bw=self.settings.quality_bw,
                             quality_color=self.settings.quality_color,
                             grayscale_threshold=self.settings.grayscale_threshold,
+                            min_bytes=self.settings.image_min_compress_bytes,
                         )
 
                     s3_key = None
