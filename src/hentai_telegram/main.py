@@ -161,7 +161,7 @@ def main():
 
     except JobError as exc:
         parser.exit(2, f"检查失败 [{exc.code}]：{exc}\n")
-    except (ValueError, RuntimeError) as exc:
+    except (ValueError, RuntimeError, PermissionError) as exc:
         parser.exit(2, f"Startup failed: {exc}\n")
 
 

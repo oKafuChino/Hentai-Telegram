@@ -30,9 +30,8 @@ python3 scripts/configure.py initial
 
 read -r APP_UID APP_GID < <(python3 scripts/configure.py ids)
 for directory in data data/app data/storage; do
-  if [[ ! -e "$directory" ]]; then
-    "${SUDO[@]}" install -d -m 750 -o "$APP_UID" -g "$APP_GID" "$directory"
-  fi
+  "${SUDO[@]}" install -d -m 750 -o "$APP_UID" -g "$APP_GID" "$directory"
+  "${SUDO[@]}" chown -R "$APP_UID:$APP_GID" "$directory"
 done
 
 "${SUDO[@]}" docker compose build app

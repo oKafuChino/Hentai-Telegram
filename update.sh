@@ -37,6 +37,12 @@ done
 "${SUDO[@]}" chmod 600 "$backup_dir/state.tar.gz"
 echo '已备份配置和服务数据库。'
 
+read -r APP_UID APP_GID < <(python3 scripts/configure.py ids)
+for directory in data data/app data/storage; do
+  "${SUDO[@]}" install -d -m 750 -o "$APP_UID" -g "$APP_GID" "$directory"
+  "${SUDO[@]}" chown -R "$APP_UID:$APP_GID" "$directory"
+done
+
 "${SUDO[@]}" docker compose up -d --no-deps app
 "${SUDO[@]}" docker compose ps
 echo 'Hentai-Telegram 更新完成！'

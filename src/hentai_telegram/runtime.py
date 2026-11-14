@@ -8,8 +8,20 @@ import sqlite3
 
 @contextmanager
 def instance_lock(path: Path):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a+b") as stream:
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except PermissionError as exc:
+        raise PermissionError(f"无法创建运行目录 {path.parent}，请检查目录权限：{exc}") from exc
+
+    try:
+        stream = path.open("a+b")
+    except PermissionError as exc:
+        raise PermissionError(
+            f"无法访问锁文件 {path}（权限不足）。"
+            f"请检查目录/文件所有者与权限，例如在宿主机执行: sudo chown -R 1000:1000 data/"
+        ) from exc
+
+    with stream:
         stream.seek(0)
         stream.write(b"0")
         stream.flush()

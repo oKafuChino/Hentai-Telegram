@@ -12,6 +12,7 @@ from hentai_telegram.config import Settings
 from hentai_telegram.db.store import Store, decode_manga
 from hentai_telegram.domain.models import Chapter, Manga, Page
 from hentai_telegram.integrations.telegraph import TelegraphClient
+from hentai_telegram.runtime import instance_lock
 from hentai_telegram.services.channel_push import ChannelPublisher, channel_post_link
 from hentai_telegram.services.tasks import TaskService
 from hentai_telegram.workers.queue import Worker
@@ -143,6 +144,19 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
 
         cancelled_task = self.store.get(task["id"])
         self.assertEqual(cancelled_task["status"], "CANCELLED")
+
+    def test_instance_lock_success(self):
+        lock_path = Path(self.temp_dir.name) / "test.lock"
+        with instance_lock(lock_path):
+            self.assertTrue(lock_path.exists())
+
+    def test_instance_lock_permission_error(self):
+        lock_path = Path(self.temp_dir.name) / "perm.lock"
+        with patch.object(Path, "open", side_effect=PermissionError("Mock denied")):
+            with self.assertRaises(PermissionError) as ctx:
+                with instance_lock(lock_path):
+                    pass
+            self.assertIn("权限不足", str(ctx.exception))
 
 
 if __name__ == "__main__":

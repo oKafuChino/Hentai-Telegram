@@ -37,12 +37,12 @@ def main():
     data = ROOT / "data"
     if data.is_symlink():
         raise ValueError("Refusing symlink data directory")
-    for name in ("app", "komga"):
+    for name in ("app", "storage"):
         path = data / name
         if not path.exists():
             path.mkdir(parents=True)
         repair(path, uid, gid)
-    print("已修复 data/app 和 data/komga 所有者及所有者读写权限；未修改漫画文件。")
+    print("已修复 data/app 和 data/storage 目录所有者及权限。")
 
 
 if __name__ == "__main__":
