@@ -71,6 +71,7 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
             upload_url="https://telegra.ph/upload",
             access_token="fake_token",
             token_file=self.root / "telegraph_token.txt",
+            settle_delay=0,
         )
 
         self.bot = MagicMock()
@@ -400,7 +401,7 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(payload["title"], "已删除")
 
     async def test_telegraph_client_create_page_uuid_slug_and_rename(self):
-        client = TelegraphClient(access_token="test_token")
+        client = TelegraphClient(access_token="test_token", settle_delay=0)
         mock_create_resp = AsyncMock()
         mock_create_resp.status = 200
         mock_create_resp.json.return_value = {
@@ -450,6 +451,36 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(edit_payload["path"], "random-uuid-slug-11-15")
         self.assertEqual(edit_payload["title"], "实际漫画原标题")
 
+    async def test_restore_and_verify_title_checks(self):
+        client = TelegraphClient(access_token="test_token", settle_delay=0.01)
+        mock_edit_resp = AsyncMock()
+        mock_edit_resp.status = 200
+        mock_edit_resp.json.return_value = {"ok": True, "result": {"title": "新标题"}}
+
+        mock_get_api_resp = AsyncMock()
+        mock_get_api_resp.status = 200
+        mock_get_api_resp.json.return_value = {"ok": True, "result": {"title": "新标题"}}
+
+        mock_get_web_resp = AsyncMock()
+        mock_get_web_resp.status = 200
+        mock_get_web_resp.text.return_value = "<html><head><title>新标题</title></head></html>"
+
+        mock_session = MagicMock()
+        mock_session.post.return_value.__aenter__.return_value = mock_edit_resp
+        mock_session.get.return_value.__aenter__.side_effect = [mock_get_api_resp, mock_get_web_resp]
+
+        await client._restore_and_verify_title(
+            session=mock_session,
+            page_path="test-path",
+            page_url="https://telegra.ph/test-path",
+            title="新标题",
+            content=[],
+            temp_uuid="old-uuid",
+        )
+
+        self.assertEqual(mock_session.post.call_count, 1)
+        self.assertEqual(mock_session.get.call_count, 2)
+
     def test_staged_pages_supports_jpeg(self):
         staging = Path(self.temp_dir.name) / "test_staged"
         staging.mkdir(parents=True, exist_ok=True)
@@ -472,7 +503,7 @@ class TestHentaiTelegram(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(s3.delete_manga_objects_sync("manga/*"), 0)
 
     async def test_create_chapter_page_pure_images(self):
-        client = TelegraphClient(access_token="test_token")
+        client = TelegraphClient(access_token="test_token", settle_delay=0)
         with patch.object(client, "create_page", return_value="https://telegra.ph/sample") as mock_cp:
             mock_session = AsyncMock()
             url = await client.create_chapter_page(

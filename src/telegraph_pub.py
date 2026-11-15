@@ -24,12 +24,13 @@ TELEGRAPH_API_BASE = "https://api.telegra.ph"
 class TelegraphPublisher:
     """Publishes manga image sequences to Telegraph with automatic pagination."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, settle_delay: float = 2.0):
         self.settings = settings
         self.access_token = settings.telegraph_access_token
         self.author_name = settings.telegraph_author_name
         self.short_name = settings.telegraph_short_name
         self.max_images_per_page = max(1, settings.telegraph_max_images_per_page)
+        self.settle_delay = settle_delay
 
     def _call_api_sync(self, endpoint: str, data: dict[str, Any], max_retries: int = 5) -> dict[str, Any]:
         """Call Telegraph API with exponential backoff on FLOOD_WAIT and network timeouts."""
@@ -106,11 +107,43 @@ class TelegraphPublisher:
         path = res["path"]
         url = res["url"]
 
-        # Rename back to original title
-        try:
-            self._edit_page_raw(path, title[:64], content_nodes)
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(f"更新 Telegraph 页面原标题失败 path={path}: {exc}")
+        # Rename back to original title with retries and propagation check
+        renamed = False
+        for attempt in range(1, 4):
+            try:
+                self._edit_page_raw(path, title[:64], content_nodes)
+                renamed = True
+                break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(f"更新 Telegraph 页面原标题失败 (尝试 {attempt}/3) path={path}: {exc}")
+                if self.settle_delay > 0:
+                    time.sleep(0.5 * attempt)
+
+        if not renamed:
+            logger.error(f"更新 Telegraph 页面真实标题失败: {path}")
+            raise RuntimeError(f"更新 Telegraph 页面真实标题失败: {path}")
+
+        if self.settle_delay > 0:
+            for attempt in range(1, 4):
+                try:
+                    page_data = self._call_api_sync("getPage", {"path": path, "return_content": False})
+                    if page_data.get("title") != random_title:
+                        break
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug(f"getPage title check failed path={path}: {exc}")
+                time.sleep(0.5 * attempt)
+
+            try:
+                with httpx.Client(timeout=10.0) as client:
+                    for attempt in range(1, 4):
+                        resp = client.get(url)
+                        if resp.status_code == 200 and random_title not in resp.text:
+                            break
+                        time.sleep(0.8 * attempt)
+            except Exception as exc:  # noqa: BLE001
+                logger.debug(f"Web check failed url={url}: {exc}")
+
+            time.sleep(self.settle_delay)
 
         return {"path": path, "url": url}
 

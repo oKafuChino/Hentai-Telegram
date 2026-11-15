@@ -111,7 +111,7 @@ class TestPipelineModules(unittest.TestCase):
             self.assertEqual(first_call_args[0][1]["title"], "已删除")
 
     def test_telegraph_create_page_raw_uuid_slug_and_rename(self):
-        pub = TelegraphPublisher(self.settings)
+        pub = TelegraphPublisher(self.settings, settle_delay=0)
         content_nodes = [{"tag": "p", "children": ["hello"]}]
 
         with patch.object(pub, "_call_api_sync") as mock_call:

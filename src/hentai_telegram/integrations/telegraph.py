@@ -28,6 +28,7 @@ class TelegraphClient:
         token_file: Path | None = None,
         catbox_userhash: str = "",
         s3_client: Any | None = None,
+        settle_delay: float = 2.0,
     ):
         self.api_url = api_url.rstrip("/")
         self.upload_url = upload_url.strip() or "https://catbox.moe/user/api.php"
@@ -37,6 +38,7 @@ class TelegraphClient:
         self.token_file = token_file
         self.catbox_userhash = catbox_userhash.strip()
         self.s3_client = s3_client
+        self.settle_delay = settle_delay
 
     async def ensure_token(self, session: aiohttp.ClientSession) -> str:
         if self.access_token:
@@ -269,20 +271,99 @@ class TelegraphClient:
         page_path = created_res.get("path") or created_res["url"].split("telegra.ph/")[-1]
         page_url = created_res["url"]
 
-        # Rename back to original title via editPage while preserving random slug path
-        try:
-            await self.edit_page(
-                session=session,
-                path=page_path,
-                title=title,
-                content=content,
-                author_name=author_name or self.author_name,
-                author_url=author_url or self.author_url,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("telegraph_restore_title_failed path=%s error=%s", page_path, exc)
+        # Rename back to original title and ensure propagation before returning
+        await self._restore_and_verify_title(
+            session=session,
+            page_path=page_path,
+            page_url=page_url,
+            title=title,
+            content=content,
+            temp_uuid=random_title,
+            author_name=author_name,
+            author_url=author_url,
+        )
 
         return page_url
+
+    async def _restore_and_verify_title(
+        self,
+        session: aiohttp.ClientSession,
+        page_path: str,
+        page_url: str,
+        title: str,
+        content: list[dict[str, Any]],
+        temp_uuid: str,
+        author_name: str | None = None,
+        author_url: str | None = None,
+    ) -> None:
+        """Restore title via editPage and ensure Telegraph web cache propagates before returning.
+
+        Prevents Telegram Instant View from caching the temporary UUID title.
+        """
+        clean_path = page_path.strip().split("telegra.ph/")[-1].split("?")[0].split("#")[0].strip("/")
+
+        # 1. Edit page with retries until Telegraph API confirms ok
+        renamed = False
+        for attempt in range(3):
+            try:
+                success = await self.edit_page(
+                    session=session,
+                    path=clean_path,
+                    title=title,
+                    content=content,
+                    author_name=author_name or self.author_name,
+                    author_url=author_url or self.author_url,
+                )
+                if success:
+                    renamed = True
+                    break
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("edit_page_attempt_failed attempt=%d path=%s error=%s", attempt + 1, clean_path, exc)
+            if attempt < 2 and self.settle_delay > 0:
+                await asyncio.sleep(0.5 * (attempt + 1))
+
+        if not renamed:
+            logger.error("telegraph_restore_title_failed_all_attempts path=%s", clean_path)
+            raise TelegraphError(f"更新 Telegraph 页面真实标题失败: {clean_path}")
+
+        # 2. Verify title via Telegraph getPage API
+        if self.settle_delay > 0:
+            for _ in range(3):
+                try:
+                    async with session.get(
+                        f"{self.api_url}/getPage/{clean_path}?return_content=false",
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            data = await resp.json()
+                            current_title = data.get("result", {}).get("title", "")
+                            if current_title and current_title != temp_uuid:
+                                break
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("get_page_api_check_error path=%s error=%s", clean_path, exc)
+                    break
+                await asyncio.sleep(0.5)
+
+            # 3. Verify public web page HTML does not serve stale UUID title
+            target_web_url = page_url if page_url.startswith("http") else f"https://telegra.ph/{clean_path}"
+            for attempt in range(3):
+                try:
+                    async with session.get(
+                        target_web_url,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                    ) as resp:
+                        if resp.status == 200:
+                            html_text = await resp.text()
+                            if temp_uuid not in html_text:
+                                break
+                            logger.info("telegraph_web_stale_uuid_detected path=%s attempt=%d; waiting...", clean_path, attempt + 1)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("get_page_web_check_error url=%s error=%s", page_url, exc)
+                    break
+                await asyncio.sleep(0.8)
+
+            # 4. Settling delay to allow CDN edge caches to synchronize before Instant View crawler hits
+            await asyncio.sleep(self.settle_delay)
 
     async def edit_page(
         self,
